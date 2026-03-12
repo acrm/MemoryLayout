@@ -589,36 +589,6 @@ const executeInstruction = (
   }
 }
 
-const formatReadSummary = (reads: MemoryRead[]): string => {
-  if (reads.length === 0) {
-    return 'none'
-  }
-  return reads.map((read) => `mem[${read.offset}] = ${read.value}`).join(', ')
-}
-
-const formatWriteSummary = (writes: MemoryWrite[]): string => {
-  if (writes.length === 0) {
-    return 'none'
-  }
-  return writes
-    .map((write) => {
-      const previous = write.previousKnown ? String(write.previousValue) : 'unknown'
-      return `mem[${write.offset}] = ${write.newValue} (prev ${previous})`
-    })
-    .join(', ')
-}
-
-const formatLocalsSummary = (locals: Record<string, number>): string => {
-  const entries = Object.entries(locals)
-  if (entries.length === 0) {
-    return 'none'
-  }
-  return entries
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([name, value]) => `${name}=${value}`)
-    .join(', ')
-}
-
 const formatByteToken = (isInitialized: boolean, value: number): string => {
   if (!isInitialized) {
     return '??'
@@ -655,7 +625,6 @@ export const MemoryLayoutSimulator: React.FC = () => {
   const [initialized, setInitialized] = useState<boolean[]>(Array(DEFAULT_MEMORY_SIZE).fill(false))
   const [locals, setLocals] = useState<Record<string, number>>({})
   const [programCounter, setProgramCounter] = useState(0)
-  const [trace, setTrace] = useState<TraceEntry[]>([])
   const [printedOutput, setPrintedOutput] = useState<string[]>([])
   const [lastStep, setLastStep] = useState<TraceEntry | null>(null)
   const [runtimeError, setRuntimeError] = useState<string | null>(null)
@@ -694,7 +663,6 @@ export const MemoryLayoutSimulator: React.FC = () => {
     setInitialized(snapshot.initialized)
     setLocals(snapshot.locals)
     setProgramCounter(0)
-    setTrace([])
     setPrintedOutput([])
     setLastStep(null)
     setRuntimeError(null)
@@ -777,7 +745,6 @@ export const MemoryLayoutSimulator: React.FC = () => {
       memorySize,
     )
 
-    setTrace((current) => [...current, result.trace])
     setLastStep(result.trace)
     setSelectedOffset((current) => pickSelectedOffset(result.trace, current))
 
@@ -814,7 +781,7 @@ export const MemoryLayoutSimulator: React.FC = () => {
     }
     let workingCounter = programCounter
 
-    const producedTrace: TraceEntry[] = []
+    let latestTrace: TraceEntry | null = null
     const producedOutput: string[] = []
 
     while (workingCounter < instructions.length) {
@@ -826,7 +793,7 @@ export const MemoryLayoutSimulator: React.FC = () => {
         memorySize,
       )
 
-      producedTrace.push(result.trace)
+      latestTrace = result.trace
       producedOutput.push(...result.printed)
 
       if (!result.succeeded) {
@@ -838,13 +805,12 @@ export const MemoryLayoutSimulator: React.FC = () => {
       workingCounter += 1
     }
 
-    if (producedTrace.length === 0) {
+    if (!latestTrace) {
       return
     }
 
-    setTrace((current) => [...current, ...producedTrace])
-    setLastStep(producedTrace[producedTrace.length - 1])
-    setSelectedOffset((current) => pickSelectedOffset(producedTrace[producedTrace.length - 1], current))
+    setLastStep(latestTrace)
+    setSelectedOffset((current) => pickSelectedOffset(latestTrace, current))
 
     if (producedOutput.length > 0) {
       setPrintedOutput((current) => [...current, ...producedOutput])
@@ -1052,38 +1018,9 @@ export const MemoryLayoutSimulator: React.FC = () => {
 
           {runtimeError && <div className="error-box runtime-error">{runtimeError}</div>}
 
-          <div className="runtime-grid">
-            <section className="runtime-box">
-              <h4>print() output</h4>
-              <pre>{printedOutput.length > 0 ? printedOutput.join('\n') : '(no output yet)'}</pre>
-            </section>
-
-            <section className="runtime-box">
-              <h4>Local values</h4>
-              <pre>{formatLocalsSummary(locals)}</pre>
-            </section>
-          </div>
-
-          <section className="trace-panel">
-            <h4>Execution Trace</h4>
-            <div className="trace-list">
-              {trace.length === 0 && <div className="empty-trace">Run Step to populate trace.</div>}
-              {trace.map((entry, index) => (
-                <article
-                  className={`trace-item ${entry.error ? 'is-error' : ''}`}
-                  key={`trace-${entry.step}-${index}`}
-                >
-                  <div className="trace-title">
-                    <strong>Step {entry.step}</strong>
-                    <code>{entry.instruction}</code>
-                  </div>
-                  <div>Reads: {formatReadSummary(entry.reads)}</div>
-                  <div>Writes: {formatWriteSummary(entry.writes)}</div>
-                  <div>Print: {entry.printed.length > 0 ? entry.printed.join(', ') : 'none'}</div>
-                  <div>Note: {entry.error ? entry.error : entry.note}</div>
-                </article>
-              ))}
-            </div>
+          <section className="runtime-box">
+            <h4>print() output</h4>
+            <pre>{printedOutput.length > 0 ? printedOutput.join('\n') : '(no output yet)'}</pre>
           </section>
         </article>
       </section>

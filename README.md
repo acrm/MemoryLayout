@@ -6,7 +6,7 @@ The app focuses on a constrained machine model:
 - Fixed-size linear memory with `16` visible cells per row
 - Named offsets (`a_offset`, `b_offset`, etc.) defined by expressions
 - Instruction list with editable memory operations and `print(...)`
-- Step-by-step execution with trace of reads and writes
+- Step-by-step execution with direct memory highlighting
 
 ## Core Idea
 
@@ -43,7 +43,7 @@ npm run build
 
 - Top section: compact monospace memory row with 16 columns (`00..15`) and row prefix (`00`).
 - Bottom-left panel: editable named offsets.
-- Bottom-right panel: editable instructions, execution controls, output, and trace log.
+- Bottom-right panel: editable instructions, execution controls, and `print()` output.
 
 ## Supported Instruction Syntax
 

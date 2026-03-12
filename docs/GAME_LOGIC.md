@@ -8,7 +8,7 @@ The model contains:
 - Linear memory displayed with fixed 16 columns per row
 - Named offsets resolved from integer expressions
 - Instruction list executed one line at a time
-- Trace output for reads, writes, and print calls
+- Immediate per-step memory highlighting and print output
 
 ## Data Model
 
@@ -62,6 +62,6 @@ Expressions support:
 - Bottom-left panel:
 	- Editable named offset definitions.
 - Bottom-right panel:
-	- Editable instructions.
-	- Execution controls (`Step`, `Run all`, `Reset`).
-	- `print()` output, local values, and trace history.
+  - Editable instructions.
+  - Execution controls (`Step`, `Run all`, `Reset`).
+  - `print()` output.
