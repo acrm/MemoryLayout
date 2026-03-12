@@ -1,103 +1,99 @@
-# Interactive Ball Game
+# Memory Layout Lab
 
-A fun, interactive React-based web game where you make a black ball move by clicking on the canvas.
+Interactive visualizer for explaining how high-level variables map onto byte offsets in linear memory.
+
+The app focuses on a constrained machine model:
+- Fixed-size linear memory (`N` cells, default `16`)
+- Named offsets (`a_offset`, `b_offset`, etc.) defined by expressions
+- Instruction list with editable memory operations and `print(...)`
+- Step-by-step execution with trace of reads and writes
+
+## Core Idea
+
+Each instruction only knows what it explicitly touches.
+
+- Read visibility: values are known only for addresses in the instruction's read set.
+- Write visibility: for write targets, previous values are treated as unknown unless read explicitly.
+- Programmer model vs machine model: the full memory state exists, but instruction-level visibility is intentionally limited.
 
 ## Quick Start
 
 ### Prerequisites
 - Node.js 18+
-- npm or yarn
+- npm
 
-### Installation & Development
+### Install and Run
 
 ```bash
-# Clone the repository
 git clone https://github.com/acrm/MemoryLayout.git
 cd MemoryLayout
-
-# Install dependencies
 npm install
-
-# Start development server
 npm run dev
 ```
 
-Open [http://localhost:5173](http://localhost:5173) in your browser.
+Open `http://localhost:5173`.
 
-### Building for Production
+### Build
 
 ```bash
 npm run build
 ```
 
-Output goes to `dist/` folder.
+## UI Layout
 
-### GitHub Pages Deployment
+- Top section: large memory grid with configurable size.
+- Bottom-left panel: editable named offsets.
+- Bottom-right panel: editable instructions, execution controls, output, and trace log.
 
-GitHub Pages is configured to deploy automatically via GitHub Actions on every push to `main`.
+## Supported Instruction Syntax
 
-1. Push your code to GitHub:
-   ```bash
-   git push origin main
-   ```
+- `mem[offset_expr] = value_expr`
+- `name = expr`
+- `print(expr)`
 
-2. Go to repository Settings > Pages > set Source to "GitHub Actions"
-
-3. The workflow will automatically build and deploy your app
-
-4. Access your game at: `https://acrm.github.io/MemoryLayout/`
-
-## Game Controls
-
-Click anywhere on the white canvas to push the ball in that direction. The ball will:
-- Accelerate towards your click
-- Bounce off canvas edges
-- Gradually slow down due to friction
-
-## Technologies Used
-
-- **React 19** - UI framework
-- **TypeScript** - Type safety
-- **Vite** - Build tool & dev server
-- **Canvas API** - 2D graphics rendering
+Expression support includes integer arithmetic (`+ - * / // %`), parentheses, named offsets, local names, and `mem[...]` reads.
 
 ## Project Structure
 
 ```
 src/
   components/
-    BallGame.tsx    # Main game component
-  App.tsx          # Root component
-  main.tsx         # Entry point
+    MemoryLayoutSimulator.tsx
+  App.tsx
+  App.css
+  index.css
 docs/
-  GAME_LOGIC.md    # Game mechanics documentation
-  TODO.md          # Roadmap and known issues
+  GAME_LOGIC.md
+  TODO.md
 scripts/
-  update-version.js # Version management script
+  update-version.js
 ```
 
-## Version Management
+## Development Commands
 
-This project uses semantic versioning tied to ISO week:
+- `npm run dev`
+- `npm run typecheck`
+- `npm run build`
+- `npm run lint`
+- `npm run test`
+
+## Version Workflow
+
+This repository uses weekly semantic versioning:
 - Format: `<weekCode>-<minor>.<build>`
-- Example: `2026w10-0.1`
+- Example: `2026w11-1.1`
 
-Version bumps after every code change:
+After tracked file changes, run exactly one command:
+
 ```bash
-npm run bump:build -- --desc "Your change description"
-npm run bump:minor -- --desc "For breaking changes"
+npm run bump:build -- --desc "Short English summary"  # regular updates
+npm run bump:minor -- --desc "Short English summary"  # minor release milestones
 ```
+
+Each bump command updates `version.json`, `package.json`, appends `build-notes.md`, and creates
+an automatic git commit with message format `<version>: <description>`.
+The command stages current working tree changes via `git add -A`.
 
 ## License
 
-MIT License - feel free to use and modify!
-
-## Contributing
-
-1. Make your changes
-2. Bump version: `npm run bump:build -- --desc "..."`
-3. Validate: `npm run typecheck && npm run build`
-4. Commit: `<version>: <description>`
-5. Push and create PR
-
-See [AI_AGENT_INSTRUCTIONS.md](./AI_AGENT_INSTRUCTIONS.md) for AI agent workflow guidelines.
+MIT

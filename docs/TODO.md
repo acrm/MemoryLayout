@@ -1,26 +1,27 @@
 # Project Roadmap
 
 ## Current Features
-- [x] Basic ball rendering
-- [x] Click-based movement
-- [x] Physics with friction
-- [x] Canvas boundary collision
-- [x] React + TypeScript setup
-- [x] Vite build configuration
+- [x] Linear memory view with configurable cell count (default 16)
+- [x] Editable named offset table with expression-based offsets
+- [x] Editable instruction list (`mem[...] = ...`, assignment, `print(...)`)
+- [x] Step-by-step and run-to-end execution
+- [x] Execution trace (reads, writes, notes, errors)
+- [x] Instruction-level visibility layer (`Instr` values / unknown `??`)
+- [x] Distinct top memory area and two bottom editing panels
 
-## TODO (Phase 2)
-- [ ] Add sound effects on click and bounce
-- [ ] Implement gravity (optional toggle)
-- [ ] Add multi-ball game mode
-- [ ] Statistics/high-score tracking
-- [ ] Mobile touch support
-- [ ] Velocity visualization
-- [ ] Speed counter display
+## Next Iteration
+- [ ] Add breakpoints and continue-until-breakpoint mode
+- [ ] Add rewind/history scrubber for step navigation
+- [ ] Add preset scenarios and import/export as JSON
+- [ ] Add memory inspector for multi-byte values (uint16/int32)
+- [ ] Add address alignment helpers and allocation preview
+- [ ] Add optional machine/ground-truth split-screen timeline
 
 ## Known Issues
-- None reported yet
+- Offset expressions currently depend on declaration order.
+- Read-before-write behavior is strict (runtime error), no warning mode yet.
 
 ## Technical Debt
-- Consider extracting physics into separate module
-- Add unit tests for collision detection
-- Performance optimization for mobile devices
+- Extract parser and execution engine into standalone module with tests.
+- Add deterministic unit tests for expression parsing and trace generation.
+- Improve instruction syntax diagnostics with exact token positions.

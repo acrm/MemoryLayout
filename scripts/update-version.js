@@ -3,7 +3,7 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { execSync } from 'child_process';
+import { execSync, spawnSync } from 'child_process';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -28,12 +28,94 @@ function getLastCommitMessage() {
   }
 }
 
+function parseArgs(argv) {
+  let isMinor = false;
+  let noCommit = false;
+  let description = '';
+
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+
+    if (arg === '--minor') {
+      isMinor = true;
+      continue;
+    }
+
+    if (arg === '--no-commit') {
+      noCommit = true;
+      continue;
+    }
+
+    if (arg === '--desc') {
+      const descParts = [];
+      let next = index + 1;
+      while (next < argv.length && !argv[next].startsWith('--')) {
+        descParts.push(argv[next]);
+        next += 1;
+      }
+      description = descParts.join(' ').trim();
+      index = next - 1;
+      continue;
+    }
+
+    if (arg.startsWith('--desc=')) {
+      description = arg.slice('--desc='.length).trim();
+    }
+  }
+
+  return { isMinor, noCommit, description };
+}
+
+function runGit(args, { allowFailure = false } = {}) {
+  const result = spawnSync('git', args, {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  if (result.status !== 0 && !allowFailure) {
+    const stderr = result.stderr ? result.stderr.trim() : '';
+    const stdout = result.stdout ? result.stdout.trim() : '';
+    const details = stderr || stdout || 'git command failed';
+    throw new Error(details);
+  }
+
+  return result;
+}
+
+function isGitRepository() {
+  const probe = runGit(['rev-parse', '--is-inside-work-tree'], { allowFailure: true });
+  return probe.status === 0 && probe.stdout.trim() === 'true';
+}
+
+function autoCommitChanges(commitMessage) {
+  if (!isGitRepository()) {
+    console.warn('! Skipping auto-commit: not inside a git repository.');
+    return;
+  }
+
+  runGit(['add', '-A']);
+
+  const hasStagedChanges = runGit(['diff', '--cached', '--quiet'], { allowFailure: true });
+  if (hasStagedChanges.status === 0) {
+    console.warn('! Skipping auto-commit: no staged changes after bump.');
+    return;
+  }
+
+  if (hasStagedChanges.status !== 1) {
+    const stderr = hasStagedChanges.stderr ? hasStagedChanges.stderr.trim() : '';
+    const stdout = hasStagedChanges.stdout ? hasStagedChanges.stdout.trim() : '';
+    throw new Error(stderr || stdout || 'Unable to determine staged changes.');
+  }
+
+  runGit(['commit', '-m', commitMessage]);
+}
+
 const versionData = JSON.parse(readFileSync(versionFile, 'utf8'));
 
 const args = process.argv.slice(2);
-const isMinor = args.includes('--minor');
-const descIdx = args.indexOf('--desc');
-const description = descIdx !== -1 ? args[descIdx + 1] : getLastCommitMessage() || 'Updates';
+const parsedArgs = parseArgs(args);
+const isMinor = parsedArgs.isMinor;
+const description = parsedArgs.description || getLastCommitMessage() || 'Updates';
 
 const currentWeek = getCurrentWeekCode();
 const weekChanged = versionData.weekCode !== currentWeek;
@@ -76,4 +158,12 @@ if (!buildNotes.includes('# Build Notes')) {
 }
 writeFileSync(buildNotesFile, buildNotes + noteEntry);
 
+const commitMessage = `${newVersion}: ${description}`;
+if (!parsedArgs.noCommit) {
+  autoCommitChanges(commitMessage);
+}
+
 console.log(`✓ Version bumped to ${newVersion}`);
+if (!parsedArgs.noCommit) {
+  console.log(`✓ Auto-commit created: ${commitMessage}`);
+}

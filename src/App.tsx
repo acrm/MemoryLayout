@@ -1,10 +1,10 @@
-import { BallGame } from './components/BallGame'
+import { MemoryLayoutSimulator } from './components/MemoryLayoutSimulator'
 import './App.css'
 
 function App() {
   return (
     <div className="app">
-      <BallGame />
+      <MemoryLayoutSimulator />
     </div>
   )
 }

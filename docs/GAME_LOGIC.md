@@ -1,33 +1,65 @@
-# Game Logic
+# Memory Execution Model
 
 ## Overview
 
-Interactive Ball Game is a simple physics-based web application where:
-- A black ball (radius 20px) moves on a white canvas (800x600px)
-- User clicks on canvas to impart velocity to the ball
-- Ball bounces off canvas edges
-- Ball gradually slows down due to friction
+Memory Layout Lab visualizes low-level memory access over a linear byte array.
 
-## Mechanics
+The model contains:
+- Linear memory with configurable size (default 16 cells)
+- Named offsets resolved from integer expressions
+- Instruction list executed one line at a time
+- Trace output for reads, writes, and print calls
 
-### Movement
-- Ball starts at center (400, 300)
-- Each click adds acceleration towards that point
-- Velocity magnitude depends on click distance
+## Data Model
 
-### Physics
-- Friction coefficient: 0.98 (98% retention per frame)
-- Acceleration per click: 0.5 units per pixel distance
-- Ball radius: 20 pixels
-- Bounce energy loss: 10% (0.9 multiplier)
+### Physical Memory
+- Backing array of byte values (`0..255`)
+- Separate initialization map
+- Uninitialized cells have no readable value
 
-### Canvas Boundaries
-- Width: 800px
-- Height: 600px
-- Ball bounces off all edges with energy loss
+### Named Offsets
+- Mapping `name -> numeric offset`
+- Expressions can reference previously declared offset names
+- Offsets must resolve to integer values in `0..memorySize-1`
 
-## Future Enhancements
-- Multiple balls
-- Gravity simulation
-- Obstacle/wall placement
-- Score/timer mechanics
+### Instruction-Level Visibility
+For each executed instruction:
+- Read set: only explicitly read cells are known
+- Write set: target cells get new values, but previous values are unknown unless read in that instruction
+- Non-touched cells are unknown to current instruction (`??`)
+
+This preserves the distinction between:
+- Programmer mental model (global expected state)
+- Machine local model (per-instruction visibility)
+
+## Supported Statements
+
+- `mem[offset_expr] = value_expr`
+- `name = expr`
+- `print(expr)`
+
+Expressions support:
+- Integer literals
+- Named offsets and local names
+- Memory reads: `mem[...]`
+- Arithmetic: `+ - * / // %`
+- Parentheses
+
+## Runtime Rules
+
+- Reads from uninitialized cells produce runtime error.
+- Memory indexes outside bounds produce runtime error.
+- Written values are normalized to byte range (`0..255`).
+- Lines that are empty or comments (`#` or `//`) are treated as no-op.
+
+## UI Mapping
+
+- Top memory grid:
+	- `State` shows actual physical memory state.
+	- `Instr` shows what current instruction can see (`read`, `write`, or `??`).
+- Bottom-left panel:
+	- Editable named offset definitions.
+- Bottom-right panel:
+	- Editable instructions.
+	- Execution controls (`Step`, `Run all`, `Reset`).
+	- `print()` output, local values, and trace history.
