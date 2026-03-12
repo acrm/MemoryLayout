@@ -1,7 +1,7 @@
 # Project Roadmap
 
 ## Current Features
-- [x] Linear memory view with configurable cell count (default 16)
+- [x] Linear memory row with fixed 16-column layout and address header
 - [x] Editable named offset table with expression-based offsets
 - [x] Editable instruction list (`mem[...] = ...`, assignment, `print(...)`)
 - [x] Step-by-step and run-to-end execution

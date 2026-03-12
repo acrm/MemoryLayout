@@ -66,8 +66,7 @@ interface ExpressionContext {
 }
 
 const DEFAULT_MEMORY_SIZE = 16
-const MIN_MEMORY_SIZE = 4
-const MAX_MEMORY_SIZE = 256
+const MEMORY_COLUMNS = 16
 
 const INITIAL_OFFSETS: OffsetDefinition[] = [
   { id: 'offset-1', name: 'a_offset', expression: '0' },
@@ -620,6 +619,25 @@ const formatLocalsSummary = (locals: Record<string, number>): string => {
     .join(', ')
 }
 
+const formatByteToken = (isInitialized: boolean, value: number): string => {
+  if (!isInitialized) {
+    return '??'
+  }
+  return value.toString(16).toUpperCase().padStart(2, '0')
+}
+
+const formatAddressToken = (value: number): string => value.toString().padStart(2, '0')
+
+const pickSelectedOffset = (entry: TraceEntry, currentSelection: number): number => {
+  if (entry.writes.length > 0) {
+    return entry.writes[0].offset
+  }
+  if (entry.reads.length > 0) {
+    return entry.reads[0].offset
+  }
+  return currentSelection
+}
+
 const defaultSnapshot = (size: number): MachineSnapshot => ({
   memory: Array(size).fill(0),
   initialized: Array(size).fill(false),
@@ -628,9 +646,7 @@ const defaultSnapshot = (size: number): MachineSnapshot => ({
 
 export const MemoryLayoutSimulator: React.FC = () => {
   const idCounter = useRef(100)
-
-  const [memorySize, setMemorySize] = useState(DEFAULT_MEMORY_SIZE)
-  const [memorySizeInput, setMemorySizeInput] = useState(String(DEFAULT_MEMORY_SIZE))
+  const memorySize = DEFAULT_MEMORY_SIZE
 
   const [offsets, setOffsets] = useState<OffsetDefinition[]>(INITIAL_OFFSETS)
   const [instructions, setInstructions] = useState<InstructionLine[]>(INITIAL_INSTRUCTIONS)
@@ -643,24 +659,9 @@ export const MemoryLayoutSimulator: React.FC = () => {
   const [printedOutput, setPrintedOutput] = useState<string[]>([])
   const [lastStep, setLastStep] = useState<TraceEntry | null>(null)
   const [runtimeError, setRuntimeError] = useState<string | null>(null)
+  const [selectedOffset, setSelectedOffset] = useState(0)
 
   const offsetResolution = useMemo(() => resolveOffsets(offsets, memorySize), [offsets, memorySize])
-
-  const ownersByOffset = useMemo(() => {
-    const ownerMap: Record<number, string[]> = {}
-    offsets.forEach((offset) => {
-      const name = offset.name.trim()
-      const value = offsetResolution.values[name]
-      if (name.length === 0 || value === undefined) {
-        return
-      }
-      if (!ownerMap[value]) {
-        ownerMap[value] = []
-      }
-      ownerMap[value].push(name)
-    })
-    return ownerMap
-  }, [offsets, offsetResolution.values])
 
   const readLookup = useMemo(() => {
     const lookup = new Map<number, number>()
@@ -697,18 +698,7 @@ export const MemoryLayoutSimulator: React.FC = () => {
     setPrintedOutput([])
     setLastStep(null)
     setRuntimeError(null)
-  }
-
-  const applyMemorySize = (): void => {
-    const parsed = Number.parseInt(memorySizeInput, 10)
-    if (Number.isNaN(parsed) || parsed < MIN_MEMORY_SIZE || parsed > MAX_MEMORY_SIZE) {
-      setRuntimeError(`Memory size must be between ${MIN_MEMORY_SIZE} and ${MAX_MEMORY_SIZE}.`)
-      return
-    }
-
-    setMemorySize(parsed)
-    setMemorySizeInput(String(parsed))
-    resetExecutionState(parsed)
+    setSelectedOffset(0)
   }
 
   const updateOffset = (id: string, patch: Partial<OffsetDefinition>): void => {
@@ -789,6 +779,7 @@ export const MemoryLayoutSimulator: React.FC = () => {
 
     setTrace((current) => [...current, result.trace])
     setLastStep(result.trace)
+    setSelectedOffset((current) => pickSelectedOffset(result.trace, current))
 
     if (result.printed.length > 0) {
       setPrintedOutput((current) => [...current, ...result.printed])
@@ -853,6 +844,7 @@ export const MemoryLayoutSimulator: React.FC = () => {
 
     setTrace((current) => [...current, ...producedTrace])
     setLastStep(producedTrace[producedTrace.length - 1])
+    setSelectedOffset((current) => pickSelectedOffset(producedTrace[producedTrace.length - 1], current))
 
     if (producedOutput.length > 0) {
       setPrintedOutput((current) => [...current, ...producedOutput])
@@ -872,81 +864,66 @@ export const MemoryLayoutSimulator: React.FC = () => {
 
   return (
     <div className="memory-layout-app">
-      <header className="hero">
-        <div>
-          <h1>Memory Layout Lab</h1>
-          <p>
-            Build and execute instruction sequences over linear memory. Each instruction only sees
-            cells it explicitly reads.
-          </p>
-        </div>
-
-        <div className="hero-controls">
-          <label htmlFor="memory-size-input" className="control-label">
-            Memory cells
-          </label>
-          <input
-            id="memory-size-input"
-            className="number-input"
-            type="number"
-            min={MIN_MEMORY_SIZE}
-            max={MAX_MEMORY_SIZE}
-            value={memorySizeInput}
-            onChange={(event) => setMemorySizeInput(event.target.value)}
-          />
-          <button type="button" onClick={applyMemorySize}>
-            Apply size
-          </button>
-          <button type="button" className="secondary" onClick={() => resetExecutionState()}>
-            Reset state
-          </button>
-        </div>
+      <header className="memory-header">
+        <h1>Memory Layout Lab</h1>
+        <p>Linear memory model with fixed 16-column view and step-by-step execution.</p>
       </header>
 
       <section className="memory-stage">
-        <div className="section-head">
-          <h2>Linear Memory</h2>
-          <p>
-            <span className="pill read-pill">Read</span>
-            <span className="pill write-pill">Write</span>
-            <span className="pill neutral-pill">Unknown to current instruction: ??</span>
-          </p>
+        <div className="memory-stage-head">
+          <h2>Memory View</h2>
+          <span>Default value: ?? | Selected value: [??]</span>
         </div>
 
-        <div className="memory-grid">
-          {Array.from({ length: memorySize }, (_, offset) => {
-            const read = readLookup.get(offset)
-            const write = writeLookup.get(offset)
-            const ownerNames = ownersByOffset[offset]
-            const stateValue = initialized[offset] ? String(memory[offset]) : '--'
-            const instructionValue =
-              read !== undefined ? String(read) : write ? String(write.newValue) : '??'
+        <div className="memory-console" role="grid" aria-label="Linear memory">
+          <div className="memory-row" role="row">
+            <span className="row-prefix" aria-hidden="true">
+              {'  '}
+            </span>
+            {Array.from({ length: MEMORY_COLUMNS }, (_, offset) => (
+              <React.Fragment key={`address-${offset}`}>
+                {offset > 0 && (
+                  <span className="separator" aria-hidden="true">
+                    {' '}
+                  </span>
+                )}
+                <span className="memory-token address-token">{formatAddressToken(offset)}</span>
+              </React.Fragment>
+            ))}
+          </div>
 
-            return (
-              <article
-                key={`cell-${offset}`}
-                className={`memory-cell ${read !== undefined ? 'is-read' : ''} ${
-                  write ? 'is-write' : ''
-                }`}
-              >
-                <div className="cell-head">
-                  <span className="cell-index">[{offset}]</span>
-                  <span className="cell-owner">{ownerNames ? ownerNames.join(', ') : 'free'}</span>
-                </div>
+          <div className="memory-row" role="row">
+            <span className="row-prefix">00</span>
+            {Array.from({ length: memorySize }, (_, offset) => {
+              const isSelected = selectedOffset === offset
+              const isRead = readLookup.has(offset)
+              const isWrite = writeLookup.has(offset)
+              const token = formatByteToken(initialized[offset], memory[offset])
+              const tokenDisplay = isSelected ? `[${token}]` : token
+              const needsSeparator =
+                offset > 0 && selectedOffset !== offset && selectedOffset !== offset - 1
 
-                <div className="cell-values">
-                  <div>
-                    <span className="value-label">State</span>
-                    <strong>{stateValue}</strong>
-                  </div>
-                  <div>
-                    <span className="value-label">Instr</span>
-                    <strong>{instructionValue}</strong>
-                  </div>
-                </div>
-              </article>
-            )
-          })}
+              return (
+                <React.Fragment key={`cell-${offset}`}>
+                  {needsSeparator && (
+                    <span className="separator" aria-hidden="true">
+                      {' '}
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    className={`memory-token value-token ${isRead ? 'is-read' : ''} ${
+                      isWrite ? 'is-write' : ''
+                    } ${isSelected ? 'is-selected' : ''}`}
+                    onClick={() => setSelectedOffset(offset)}
+                    aria-label={`Cell ${formatAddressToken(offset)} value ${token}`}
+                  >
+                    {tokenDisplay}
+                  </button>
+                </React.Fragment>
+              )
+            })}
+          </div>
         </div>
       </section>
 

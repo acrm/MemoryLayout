@@ -1,11 +1,7 @@
 :root {
-  --font-display: 'Barlow Condensed', 'Franklin Gothic Medium', 'Arial Narrow', sans-serif;
-  --font-sans: 'Manrope', 'Trebuchet MS', 'Segoe UI', sans-serif;
+  --font-sans: 'Segoe UI', 'Trebuchet MS', sans-serif;
   --font-mono: 'IBM Plex Mono', 'Consolas', 'Courier New', monospace;
-  --ink-strong: #1f3028;
-  --ink-muted: #526159;
-  --line: #cfdacb;
-  line-height: 1.35;
+  line-height: 1.3;
   font-weight: 450;
   font-family: var(--font-sans);
 }
@@ -18,7 +14,7 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background: #eef4ed;
+  background: #ffffff;
 }
 
 #root {

@@ -5,7 +5,7 @@
 Memory Layout Lab visualizes low-level memory access over a linear byte array.
 
 The model contains:
-- Linear memory with configurable size (default 16 cells)
+- Linear memory displayed with fixed 16 columns per row
 - Named offsets resolved from integer expressions
 - Instruction list executed one line at a time
 - Trace output for reads, writes, and print calls
@@ -54,9 +54,11 @@ Expressions support:
 
 ## UI Mapping
 
-- Top memory grid:
-	- `State` shows actual physical memory state.
-	- `Instr` shows what current instruction can see (`read`, `write`, or `??`).
+- Top memory row:
+	- Header columns show low address parts (`00..15`).
+	- Row prefix shows the high address part (currently `00`).
+	- Each cell is rendered as a two-character token (`??` by default).
+	- Selected cell replaces surrounding spacing with bracket emphasis (`[??]`).
 - Bottom-left panel:
 	- Editable named offset definitions.
 - Bottom-right panel:
