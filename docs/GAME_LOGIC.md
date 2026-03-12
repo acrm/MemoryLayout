@@ -54,19 +54,20 @@ Expressions support:
 
 ## UI Mapping
 
-- Top memory row:
+- 2x2 equal quadrants:
+	- Top-left: memory row and execution controls.
+	- Top-right: multiline offset editor.
+	- Bottom-left: instruction editor.
+	- Bottom-right: instruction continuation editor.
+- Memory row details:
 	- Header columns show low address parts (`00..15`).
 	- Row prefix shows the high address part (currently `00`).
 	- Each cell is rendered as a two-character token (`??` by default).
 	- Selected cell replaces surrounding spacing with bracket emphasis (`[??]`).
-- Bottom-left panel:
-	- One multiline offset editor with `name: expression` lines.
-	- No line numbering.
+- Offset editor:
+	- Uses `name: expression` lines without numbering.
 	- Cursor line selects the resolved memory cell.
-- Bottom-right panel:
-  - Editable instructions.
-	- Instruction lines are numbered.
+- Instruction editors:
+	- Lines are numbered across both panes as one continuous list.
 	- Active line highlights referenced offsets with per-offset colors.
 	- Matching memory cells reuse the same colors.
-  - Execution controls (`Step`, `Run all`, `Reset`).
-  - `print()` output.

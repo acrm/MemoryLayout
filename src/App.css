@@ -7,9 +7,10 @@
   --terminal-size: calc(80vw / 50);
   height: 100%;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
-  gap: 0.9em;
-  padding: 0.9em 3vw 1.2em;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 0.8em;
+  padding: 0.8em;
   background: #ffffff;
   color: #111111;
   font-family: var(--font-mono);
@@ -22,57 +23,51 @@
   font: inherit;
 }
 
-.memory-header {
-  text-align: center;
+.zone {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45em;
+  overflow: hidden;
 }
 
-.memory-header h1,
-.memory-header p,
-.memory-stage-head h2,
-.panel-head h3,
+.zone-title,
 .panel-hint,
+.status-chip,
 .runtime-box h4 {
   margin: 0;
   font-weight: 500;
 }
 
-.memory-stage {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.35em;
+.panel-hint,
+.status-chip,
+.row-prefix-muted,
+.address-token {
+  color: #8a8a8a;
 }
 
 .memory-stage-head {
-  width: 80vw;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  color: #5a5a5a;
+  gap: 0.8em;
 }
 
 .memory-console {
-  width: 100%;
   display: flex;
   flex-direction: column;
-  align-items: center;
 }
 
 .memory-row {
-  width: max-content;
   display: flex;
   align-items: center;
   white-space: nowrap;
+  width: max-content;
 }
 
 .row-prefix {
   width: 2ch;
   text-align: right;
-}
-
-.row-prefix-muted,
-.address-token {
-  color: #8a8a8a;
 }
 
 .separator {
@@ -98,48 +93,43 @@
   font-weight: 700;
 }
 
-.workbench {
-  min-height: 0;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 2vw;
-  align-items: start;
-}
-
-.panel {
-  min-height: 0;
-  padding: 0;
+.execution-controls {
   display: flex;
-  flex-direction: column;
-  gap: 0.5em;
-  overflow: hidden;
-}
-
-.panel-head {
-  display: flex;
-  justify-content: space-between;
+  flex-wrap: wrap;
   align-items: center;
-}
-
-.panel-hint {
-  color: #666666;
+  gap: 0.4em;
 }
 
 button {
-  border: 1px solid #cfcfcf;
-  background: #f6f6f6;
-  color: #1a1a1a;
-  padding: 0.2em 0.5em;
+  border: 1px solid #d0d0d0;
+  background: #f7f7f7;
+  color: #191919;
+  padding: 0.18em 0.45em;
   cursor: pointer;
 }
 
 button:disabled {
-  cursor: not-allowed;
   opacity: 0.5;
+  cursor: not-allowed;
 }
 
 button.secondary {
   background: #fcfcfc;
+}
+
+.runtime-box {
+  border: 1px solid #e4e4e4;
+  padding: 0.35em 0.45em;
+  display: grid;
+  gap: 0.3em;
+  min-height: 0;
+}
+
+.runtime-box pre {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow: auto;
+  max-height: 8.5em;
 }
 
 .offset-editor,
@@ -148,42 +138,32 @@ button.secondary {
   border: 1px solid #dddddd;
   background: #ffffff;
   color: #111111;
+  padding: 0.35em 0.45em;
   resize: none;
-  padding: 0.4em 0.45em;
   line-height: 1.35;
 }
 
 .offset-editor {
-  min-height: 14em;
-}
-
-.execution-controls {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.45em;
-}
-
-.status-chip {
-  color: #4d4d4d;
+  flex: 1;
+  min-height: 0;
 }
 
 .instructions-editor {
   min-height: 0;
-  height: 19em;
+  height: 100%;
   display: grid;
   grid-template-columns: 4ch 1fr;
-  gap: 0.4em;
+  gap: 0.35em;
 }
 
 .instruction-line-numbers {
   margin: 0;
   border: 1px solid #dddddd;
   background: #fafafa;
-  padding: 0.4em 0;
-  text-align: right;
+  color: #8f8f8f;
+  padding: 0.35em 0;
   overflow: hidden;
-  color: #8b8b8b;
+  text-align: right;
 }
 
 .instruction-line-numbers > div {
@@ -205,7 +185,7 @@ button.secondary {
   width: 100%;
   height: 100%;
   border: 0;
-  padding: 0.4em 0.45em;
+  padding: 0.35em 0.45em;
   overflow: auto;
   line-height: 1.35;
 }
@@ -227,28 +207,14 @@ button.secondary {
 }
 
 .instruction-editor::selection {
-  background: rgba(120, 120, 120, 0.25);
+  background: rgba(100, 100, 100, 0.25);
   color: transparent;
 }
 
 .error-box {
   background: #fff3f3;
   color: #8d2b2b;
-  padding: 0.35em 0.45em;
-}
-
-.runtime-box {
-  border: 1px solid #e2e2e2;
-  padding: 0.35em 0.45em;
-  display: grid;
-  gap: 0.3em;
-}
-
-.runtime-box pre {
-  margin: 0;
-  max-height: 9em;
-  overflow: auto;
-  white-space: pre-wrap;
+  padding: 0.28em 0.4em;
 }
 
 @media (max-width: 1100px) {
@@ -256,25 +222,7 @@ button.secondary {
     --terminal-size: calc(92vw / 50);
     height: auto;
     min-height: 100vh;
-    grid-template-rows: auto auto auto;
-    padding: 0.8em 2vw 1.1em;
-  }
-
-  .memory-stage-head {
-    width: 92vw;
-  }
-
-  .workbench {
     grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 760px) {
-  .offset-editor {
-    min-height: 11em;
-  }
-
-  .instructions-editor {
-    height: 14em;
+    grid-template-rows: repeat(4, minmax(16em, auto));
   }
 }

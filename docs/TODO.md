@@ -4,11 +4,11 @@
 - [x] Linear memory row with fixed 16-column layout and address header
 - [x] Minimalist white layout for child-friendly visual focus
 - [x] Multiline offset editor with auto-suggested sequential value after `name:`
-- [x] Multiline instruction editor with line numbers
+- [x] Split multiline instruction editor with line-numbered continuation pane
 - [x] Step-by-step and run-to-end execution
 - [x] Instruction-level visibility layer (`Instr` values / unknown `??`)
 - [x] Active instruction offset color mapping to memory cells
-- [x] Distinct top memory area and two bottom editing panels
+- [x] 2x2 equal-zone layout (memory, offsets, instructions, continuation)
 
 ## Next Iteration
 - [ ] Add breakpoints and continue-until-breakpoint mode

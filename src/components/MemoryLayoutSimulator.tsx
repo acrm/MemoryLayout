@@ -64,6 +64,7 @@ interface ExecutionResult {
 
 const DEFAULT_MEMORY_SIZE = 16
 const MEMORY_COLUMNS = 16
+const INSTRUCTION_SPLIT_AT = 12
 
 const INITIAL_OFFSETS_TEXT = ['a_offset: 0', 'b_offset: 1', 'c_offset: a_offset + 3'].join('\n')
 
@@ -421,6 +422,13 @@ const suggestNextOffsetValue = (text: string, targetLine: number, memorySize: nu
   return Math.max(...resolved) + 1
 }
 
+const normalizeTailLines = (lines: string[]): string[] => {
+  if (lines.length === 1 && lines[0] === '') {
+    return []
+  }
+  return lines
+}
+
 const extractOffsetNames = (line: string, offsetValues: Record<string, number>): string[] => {
   const names: string[] = []
   const seen = new Set<string>()
@@ -711,9 +719,15 @@ export const MemoryLayoutSimulator: React.FC = () => {
   const memorySize = DEFAULT_MEMORY_SIZE
 
   const offsetEditorRef = useRef<HTMLTextAreaElement>(null)
-  const instructionEditorRef = useRef<HTMLTextAreaElement>(null)
-  const instructionHighlightRef = useRef<HTMLPreElement>(null)
-  const instructionLineRef = useRef<HTMLPreElement>(null)
+
+  const instructionEditorLeftRef = useRef<HTMLTextAreaElement>(null)
+  const instructionEditorRightRef = useRef<HTMLTextAreaElement>(null)
+
+  const instructionHighlightLeftRef = useRef<HTMLPreElement>(null)
+  const instructionHighlightRightRef = useRef<HTMLPreElement>(null)
+
+  const instructionLineLeftRef = useRef<HTMLPreElement>(null)
+  const instructionLineRightRef = useRef<HTMLPreElement>(null)
 
   const [offsetEditorText, setOffsetEditorText] = useState(INITIAL_OFFSETS_TEXT)
   const [instructionEditorText, setInstructionEditorText] = useState(INITIAL_INSTRUCTIONS_TEXT)
@@ -729,7 +743,9 @@ export const MemoryLayoutSimulator: React.FC = () => {
 
   const [activeOffsetLine, setActiveOffsetLine] = useState(0)
   const [activeInstructionLine, setActiveInstructionLine] = useState(0)
-  const [focusedEditor, setFocusedEditor] = useState<'offsets' | 'instructions' | null>(null)
+  const [focusedEditor, setFocusedEditor] = useState<
+    'offsets' | 'instructions-left' | 'instructions-right' | null
+  >(null)
 
   const parsedOffsets = useMemo(
     () => parseOffsetEditorText(offsetEditorText, memorySize),
@@ -740,6 +756,20 @@ export const MemoryLayoutSimulator: React.FC = () => {
     () => splitEditorLines(instructionEditorText),
     [instructionEditorText],
   )
+
+  const leftInstructionLines = useMemo(
+    () => instructionLines.slice(0, INSTRUCTION_SPLIT_AT),
+    [instructionLines],
+  )
+
+  const rightInstructionLines = useMemo(
+    () => instructionLines.slice(INSTRUCTION_SPLIT_AT),
+    [instructionLines],
+  )
+
+  const leftEditorValue = leftInstructionLines.join('\n')
+  const rightEditorValue =
+    rightInstructionLines.length > 0 ? rightInstructionLines.join('\n') : ''
 
   const activeInstructionText = instructionLines[activeInstructionLine] ?? ''
 
@@ -812,32 +842,73 @@ export const MemoryLayoutSimulator: React.FC = () => {
     setActiveOffsetLine(getLineIndexFromCursor(offsetEditorText, editor.selectionStart))
   }
 
-  const handleInstructionEditorChange = (event: React.ChangeEvent<HTMLTextAreaElement>): void => {
-    setInstructionEditorText(event.target.value.replace(/\r/g, ''))
+  const handleInstructionEditorChangeLeft = (
+    event: React.ChangeEvent<HTMLTextAreaElement>,
+  ): void => {
+    const nextLeftLines = splitEditorLines(event.target.value.replace(/\r/g, ''))
+    const currentRightLines = instructionLines.slice(INSTRUCTION_SPLIT_AT)
+    setInstructionEditorText([...nextLeftLines, ...currentRightLines].join('\n'))
     resetExecutionState()
   }
 
-  const handleInstructionCursorActivity = (): void => {
-    const editor = instructionEditorRef.current
-    if (!editor) {
-      return
-    }
-    setActiveInstructionLine(getLineIndexFromCursor(instructionEditorText, editor.selectionStart))
+  const handleInstructionEditorChangeRight = (
+    event: React.ChangeEvent<HTMLTextAreaElement>,
+  ): void => {
+    const nextRightLines = normalizeTailLines(
+      splitEditorLines(event.target.value.replace(/\r/g, '')),
+    )
+    const currentLeftLines = instructionLines.slice(0, INSTRUCTION_SPLIT_AT)
+    setInstructionEditorText([...currentLeftLines, ...nextRightLines].join('\n'))
+    resetExecutionState()
   }
 
-  const syncInstructionEditorScroll = (): void => {
-    const editor = instructionEditorRef.current
+  const handleInstructionCursorActivityLeft = (): void => {
+    const editor = instructionEditorLeftRef.current
+    if (!editor) {
+      return
+    }
+    const localLine = getLineIndexFromCursor(leftEditorValue, editor.selectionStart)
+    setActiveInstructionLine(localLine)
+  }
+
+  const handleInstructionCursorActivityRight = (): void => {
+    const editor = instructionEditorRightRef.current
+    if (!editor) {
+      return
+    }
+    const localLine = getLineIndexFromCursor(rightEditorValue, editor.selectionStart)
+    setActiveInstructionLine(INSTRUCTION_SPLIT_AT + localLine)
+  }
+
+  const syncInstructionEditorScrollLeft = (): void => {
+    const editor = instructionEditorLeftRef.current
     if (!editor) {
       return
     }
 
-    if (instructionHighlightRef.current) {
-      instructionHighlightRef.current.scrollTop = editor.scrollTop
-      instructionHighlightRef.current.scrollLeft = editor.scrollLeft
+    if (instructionHighlightLeftRef.current) {
+      instructionHighlightLeftRef.current.scrollTop = editor.scrollTop
+      instructionHighlightLeftRef.current.scrollLeft = editor.scrollLeft
     }
 
-    if (instructionLineRef.current) {
-      instructionLineRef.current.scrollTop = editor.scrollTop
+    if (instructionLineLeftRef.current) {
+      instructionLineLeftRef.current.scrollTop = editor.scrollTop
+    }
+  }
+
+  const syncInstructionEditorScrollRight = (): void => {
+    const editor = instructionEditorRightRef.current
+    if (!editor) {
+      return
+    }
+
+    if (instructionHighlightRightRef.current) {
+      instructionHighlightRightRef.current.scrollTop = editor.scrollTop
+      instructionHighlightRightRef.current.scrollLeft = editor.scrollLeft
+    }
+
+    if (instructionLineRightRef.current) {
+      instructionLineRightRef.current.scrollTop = editor.scrollTop
     }
   }
 
@@ -859,7 +930,7 @@ export const MemoryLayoutSimulator: React.FC = () => {
 
   const activeInstructionNamesKey = instructionOffsetColors.names.join('|')
   useEffect(() => {
-    if (focusedEditor !== 'instructions') {
+    if (focusedEditor !== 'instructions-left' && focusedEditor !== 'instructions-right') {
       return
     }
 
@@ -875,7 +946,8 @@ export const MemoryLayoutSimulator: React.FC = () => {
   }, [focusedEditor, activeInstructionNamesKey, parsedOffsets.values, instructionOffsetColors.names])
 
   useEffect(() => {
-    syncInstructionEditorScroll()
+    syncInstructionEditorScrollLeft()
+    syncInstructionEditorScrollRight()
   }, [instructionEditorText])
 
   const executeSingleStep = (): void => {
@@ -978,19 +1050,112 @@ export const MemoryLayoutSimulator: React.FC = () => {
   }
 
   const isProgramFinished = programCounter >= instructionLines.length
-  const showInstructionCellColors = focusedEditor === 'instructions'
+  const showInstructionCellColors =
+    focusedEditor === 'instructions-left' || focusedEditor === 'instructions-right'
+
+  const showLeftPrefixSeparator = selectedOffset !== 0
+
+  const renderInstructionPane = (
+    side: 'left' | 'right',
+    lines: string[],
+    baseLineIndex: number,
+    editorValue: string,
+  ) => {
+    const displayLines = lines.length > 0 ? lines : ['']
+    const editorRef =
+      side === 'left' ? instructionEditorLeftRef : instructionEditorRightRef
+    const highlightRef =
+      side === 'left' ? instructionHighlightLeftRef : instructionHighlightRightRef
+    const lineRef = side === 'left' ? instructionLineLeftRef : instructionLineRightRef
+
+    return (
+      <div className="instructions-editor">
+        <pre ref={lineRef} className="instruction-line-numbers" aria-hidden="true">
+          {displayLines.map((_, index) => (
+            <div key={`${side}-ln-${index}`}>{baseLineIndex + index + 1}</div>
+          ))}
+        </pre>
+
+        <div className="instruction-editor-surface">
+          <pre ref={highlightRef} className="instruction-highlight" aria-hidden="true">
+            {displayLines.map((line, index) => {
+              const globalLineIndex = baseLineIndex + index
+              const isActiveLine = globalLineIndex === activeInstructionLine
+
+              return (
+                <div
+                  key={`${side}-hl-${globalLineIndex}`}
+                  className={`instruction-highlight-line ${isActiveLine ? 'is-active-line' : ''}`}
+                >
+                  {isActiveLine
+                    ? renderInstructionLineWithColors(
+                        line,
+                        instructionOffsetColors.colorByOffsetName,
+                        `${side}-${globalLineIndex}`,
+                      )
+                    : line || ' '}
+                </div>
+              )
+            })}
+          </pre>
+
+          <textarea
+            ref={editorRef}
+            className="instruction-editor"
+            value={editorValue}
+            onChange={
+              side === 'left'
+                ? handleInstructionEditorChangeLeft
+                : handleInstructionEditorChangeRight
+            }
+            onSelect={
+              side === 'left'
+                ? handleInstructionCursorActivityLeft
+                : handleInstructionCursorActivityRight
+            }
+            onClick={
+              side === 'left'
+                ? handleInstructionCursorActivityLeft
+                : handleInstructionCursorActivityRight
+            }
+            onKeyUp={
+              side === 'left'
+                ? handleInstructionCursorActivityLeft
+                : handleInstructionCursorActivityRight
+            }
+            onScroll={
+              side === 'left'
+                ? syncInstructionEditorScrollLeft
+                : syncInstructionEditorScrollRight
+            }
+            onFocus={() => {
+              setFocusedEditor(side === 'left' ? 'instructions-left' : 'instructions-right')
+              if (side === 'left') {
+                handleInstructionCursorActivityLeft()
+              } else {
+                handleInstructionCursorActivityRight()
+              }
+            }}
+            onBlur={() => setFocusedEditor(null)}
+            spellCheck={false}
+          />
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="memory-layout-app">
-      <header className="memory-header">
-        <h1>Memory Layout Trainer</h1>
-        <p>type offsets, type commands, step through memory</p>
-      </header>
+      <section className="zone memory-zone">
+        <div className="zone-title">memory</div>
 
-      <section className="memory-stage">
         <div className="memory-stage-head">
-          <h2>memory</h2>
-          <span>[??] = selected cell</span>
+          <span>[??] = selected</span>
+          <span className="status-chip">
+            {isProgramFinished
+              ? 'program finished'
+              : `next line: ${programCounter + 1}/${instructionLines.length}`}
+          </span>
         </div>
 
         <div className="memory-console" role="grid" aria-label="Linear memory">
@@ -1015,9 +1180,11 @@ export const MemoryLayoutSimulator: React.FC = () => {
 
           <div className="memory-row" role="row">
             <span className="row-prefix row-prefix-muted">00</span>
-            <span className="separator" aria-hidden="true">
-              {' '}
-            </span>
+            {showLeftPrefixSeparator && (
+              <span className="separator" aria-hidden="true">
+                {' '}
+              </span>
+            )}
             {Array.from({ length: memorySize }, (_, offset) => {
               const isSelected = selectedOffset === offset
               const token = formatByteToken(initialized[offset], memory[offset])
@@ -1050,146 +1217,87 @@ export const MemoryLayoutSimulator: React.FC = () => {
             })}
           </div>
         </div>
+
+        <div className="execution-controls">
+          <button
+            type="button"
+            onClick={executeSingleStep}
+            disabled={isProgramFinished || parsedOffsets.errors.length > 0}
+          >
+            step
+          </button>
+          <button
+            type="button"
+            onClick={executeAll}
+            disabled={isProgramFinished || parsedOffsets.errors.length > 0}
+          >
+            run all
+          </button>
+          <button
+            type="button"
+            className="secondary"
+            onClick={() => {
+              resetExecutionState()
+              setSelectedOffset(0)
+            }}
+          >
+            reset
+          </button>
+        </div>
+
+        <section className="runtime-box">
+          <h4>print output</h4>
+          <pre>{printedOutput.length > 0 ? printedOutput.join('\n') : '(no output yet)'}</pre>
+          {runtimeError && <div className="error-box">{runtimeError}</div>}
+          <h4>locals</h4>
+          <pre>
+            {Object.keys(locals).length === 0
+              ? '(none)'
+              : Object.entries(locals)
+                  .map(([name, value]) => `${name}=${value}`)
+                  .join(', ')}
+          </pre>
+          {lastStep && <h4>last line: {lastStep.step}</h4>}
+        </section>
       </section>
 
-      <section className="workbench">
-        <article className="panel offsets-panel">
-          <div className="panel-head">
-            <h3>offsets</h3>
+      <section className="zone offsets-zone">
+        <div className="zone-title">offsets</div>
+        <p className="panel-hint">format: name: expression</p>
+
+        <textarea
+          ref={offsetEditorRef}
+          className="offset-editor"
+          value={offsetEditorText}
+          onChange={handleOffsetEditorChange}
+          onSelect={handleOffsetCursorActivity}
+          onClick={handleOffsetCursorActivity}
+          onKeyUp={handleOffsetCursorActivity}
+          onFocus={() => {
+            setFocusedEditor('offsets')
+            handleOffsetCursorActivity()
+          }}
+          onBlur={() => setFocusedEditor(null)}
+          spellCheck={false}
+        />
+
+        {parsedOffsets.errors.length > 0 && (
+          <div className="error-box">
+            {parsedOffsets.errors.map((error) => (
+              <div key={error}>{error}</div>
+            ))}
           </div>
+        )}
+      </section>
 
-          <p className="panel-hint">format: name: expression</p>
+      <section className="zone instructions-zone">
+        <div className="zone-title">instructions</div>
+        {renderInstructionPane('left', leftInstructionLines, 0, leftEditorValue)}
+      </section>
 
-          <textarea
-            ref={offsetEditorRef}
-            className="offset-editor"
-            value={offsetEditorText}
-            onChange={handleOffsetEditorChange}
-            onSelect={handleOffsetCursorActivity}
-            onClick={handleOffsetCursorActivity}
-            onKeyUp={handleOffsetCursorActivity}
-            onFocus={() => {
-              setFocusedEditor('offsets')
-              handleOffsetCursorActivity()
-            }}
-            onBlur={() => setFocusedEditor(null)}
-            spellCheck={false}
-          />
-
-          {parsedOffsets.errors.length > 0 && (
-            <div className="error-box">
-              {parsedOffsets.errors.map((error) => (
-                <div key={error}>{error}</div>
-              ))}
-            </div>
-          )}
-        </article>
-
-        <article className="panel instructions-panel">
-          <div className="panel-head">
-            <h3>instructions</h3>
-          </div>
-
-          <p className="panel-hint">supports mem[...] = expr, name = expr, print(expr)</p>
-
-          <div className="execution-controls">
-            <button
-              type="button"
-              onClick={executeSingleStep}
-              disabled={isProgramFinished || parsedOffsets.errors.length > 0}
-            >
-              step
-            </button>
-            <button
-              type="button"
-              onClick={executeAll}
-              disabled={isProgramFinished || parsedOffsets.errors.length > 0}
-            >
-              run all
-            </button>
-            <button
-              type="button"
-              className="secondary"
-              onClick={() => {
-                resetExecutionState()
-                setSelectedOffset(0)
-              }}
-            >
-              reset
-            </button>
-            <span className="status-chip">
-              {isProgramFinished
-                ? 'program finished'
-                : `next line: ${programCounter + 1}/${instructionLines.length}`}
-            </span>
-          </div>
-
-          <div className="instructions-editor">
-            <pre ref={instructionLineRef} className="instruction-line-numbers" aria-hidden="true">
-              {instructionLines.map((_, index) => (
-                <div key={`ln-${index}`}>{index + 1}</div>
-              ))}
-            </pre>
-
-            <div className="instruction-editor-surface">
-              <pre ref={instructionHighlightRef} className="instruction-highlight" aria-hidden="true">
-                {instructionLines.map((line, index) => (
-                  <div
-                    key={`hl-${index}`}
-                    className={`instruction-highlight-line ${
-                      index === activeInstructionLine ? 'is-active-line' : ''
-                    }`}
-                  >
-                    {index === activeInstructionLine
-                      ? renderInstructionLineWithColors(
-                          line,
-                          instructionOffsetColors.colorByOffsetName,
-                          `line-${index}`,
-                        )
-                      : line || ' '}
-                  </div>
-                ))}
-              </pre>
-
-              <textarea
-                ref={instructionEditorRef}
-                className="instruction-editor"
-                value={instructionEditorText}
-                onChange={handleInstructionEditorChange}
-                onSelect={handleInstructionCursorActivity}
-                onClick={handleInstructionCursorActivity}
-                onKeyUp={handleInstructionCursorActivity}
-                onScroll={syncInstructionEditorScroll}
-                onFocus={() => {
-                  setFocusedEditor('instructions')
-                  handleInstructionCursorActivity()
-                }}
-                onBlur={() => setFocusedEditor(null)}
-                spellCheck={false}
-              />
-            </div>
-          </div>
-
-          {runtimeError && <div className="error-box">{runtimeError}</div>}
-
-          <section className="runtime-box">
-            <h4>print output</h4>
-            <pre>{printedOutput.length > 0 ? printedOutput.join('\n') : '(no output yet)'}</pre>
-            <h4>locals</h4>
-            <pre>
-              {Object.keys(locals).length === 0
-                ? '(none)'
-                : Object.entries(locals)
-                    .map(([name, value]) => `${name}=${value}`)
-                    .join(', ')}
-            </pre>
-            {lastStep && (
-              <h4>
-                last line: <span>{lastStep.step}</span>
-              </h4>
-            )}
-          </section>
-        </article>
+      <section className="zone instructions-zone">
+        <div className="zone-title">instructions cont.</div>
+        {renderInstructionPane('right', rightInstructionLines, INSTRUCTION_SPLIT_AT, rightEditorValue)}
       </section>
     </div>
   )
