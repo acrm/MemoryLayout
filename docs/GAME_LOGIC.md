@@ -60,8 +60,13 @@ Expressions support:
 	- Each cell is rendered as a two-character token (`??` by default).
 	- Selected cell replaces surrounding spacing with bracket emphasis (`[??]`).
 - Bottom-left panel:
-	- Editable named offset definitions.
+	- One multiline offset editor with `name: expression` lines.
+	- No line numbering.
+	- Cursor line selects the resolved memory cell.
 - Bottom-right panel:
   - Editable instructions.
+	- Instruction lines are numbered.
+	- Active line highlights referenced offsets with per-offset colors.
+	- Matching memory cells reuse the same colors.
   - Execution controls (`Step`, `Run all`, `Reset`).
   - `print()` output.

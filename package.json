@@ -1,7 +1,7 @@
 {
   "name": "memory-layout-lab",
   "private": true,
-  "version": "2026w11-1.3",
+  "version": "2026w11-1.4",
   "type": "module",
   "scripts": {
     "dev": "vite",

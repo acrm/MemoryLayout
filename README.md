@@ -42,8 +42,9 @@ npm run build
 ## UI Layout
 
 - Top section: compact monospace memory row with 16 columns (`00..15`) and row prefix (`00`).
-- Bottom-left panel: editable named offsets.
-- Bottom-right panel: editable instructions, execution controls, and `print()` output.
+- Bottom-left panel: single multiline offset editor (`name: expression`) without line numbering.
+- Bottom-right panel: multiline instruction editor with line numbering, execution controls, and `print()` output.
+- Cursor interactions: active offset line selects its memory cell; active instruction line colors referenced offsets and matching memory cells.
 
 ## Supported Instruction Syntax
 
