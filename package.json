@@ -1,0 +1,31 @@
+{
+  "name": "interactive-ball-game",
+  "private": true,
+  "version": "2026w10-0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "typecheck": "tsc -b --pretty false",
+    "test": "echo \"No tests configured\"",
+    "lint": "eslint .",
+    "preview": "vite preview",
+    "bump:build": "node scripts/update-version.js",
+    "bump:minor": "node scripts/update-version.js --minor"
+  },
+  "dependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "typescript": "~5.6.2",
+    "vite": "^6.0.5",
+    "eslint": "^9.17.0",
+    "@eslint/js": "^9.17.0",
+    "typescript-eslint": "^8.18.2",
+    "globals": "^15.14.0"
+  }
+}
