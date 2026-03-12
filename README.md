@@ -5,8 +5,9 @@ Interactive visualizer for explaining how high-level variables map onto byte off
 The app focuses on a constrained machine model:
 - Fixed-size linear memory with `16` visible cells per row
 - Named offsets (`a_offset`, `b_offset`, etc.) defined by expressions
-- Instruction list with editable memory operations and `print(...)`
-- Step-by-step execution with direct memory highlighting
+- Editable Low-Level instruction list with memory operations and `print(...)`
+- Read-only High-Level code view selected from built-in examples
+- Step-by-step execution with synchronized highlighting across memory and both code panes
 
 ## Core Idea
 
@@ -44,9 +45,10 @@ npm run build
 - 2x2 layout with four equal zones.
 - Top-left zone: compact monospace memory row with 16 columns (`00..15`), row prefix (`00`), and execution controls.
 - Top-right zone: single multiline offset editor (`name: expression`) without line numbering.
-- Bottom-left zone: multiline instruction editor with line numbering.
-- Bottom-right zone: instruction continuation editor with line numbering.
-- Cursor interactions: active offset line selects its memory cell; active instruction line colors referenced offsets and matching memory cells.
+- Bottom-left zone: multiline Low-Level instruction editor with line numbering.
+- Bottom-right zone: read-only High-Level code pane with line numbering and example selector.
+- Cursor interactions: active offset line selects its memory cell; active Low-Level line colors referenced offsets and matching memory cells.
+- Execution view: current runtime line is highlighted in both Low-Level and High-Level panes.
 
 ## Supported Instruction Syntax
 

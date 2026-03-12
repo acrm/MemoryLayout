@@ -4,11 +4,13 @@
 - [x] Linear memory row with fixed 16-column layout and address header
 - [x] Minimalist white layout for child-friendly visual focus
 - [x] Multiline offset editor with auto-suggested sequential value after `name:`
-- [x] Split multiline instruction editor with line-numbered continuation pane
+- [x] Editable multiline Low-Level instruction editor with line numbers
+- [x] Read-only High-Level code pane with example dropdown
 - [x] Step-by-step and run-to-end execution
 - [x] Instruction-level visibility layer (`Instr` values / unknown `??`)
-- [x] Active instruction offset color mapping to memory cells
-- [x] 2x2 equal-zone layout (memory, offsets, instructions, continuation)
+- [x] Active Low-Level offset color mapping to memory cells
+- [x] Synchronized execution highlighting in Low-Level and High-Level panes
+- [x] 2x2 equal-zone layout (memory, offsets, low-level, high-level)
 
 ## Next Iteration
 - [ ] Add breakpoints and continue-until-breakpoint mode

@@ -4,15 +4,15 @@
 }
 
 .memory-layout-app {
-  --terminal-size: calc(80vw / 50);
+  --terminal-size: clamp(14px, calc(80vw / 52), 22px);
   height: 100%;
   display: grid;
   grid-template-columns: 1fr 1fr;
   grid-template-rows: 1fr 1fr;
-  gap: 0.8em;
-  padding: 0.8em;
+  gap: 0.9em;
+  padding: 0.9em;
   background: #ffffff;
-  color: #111111;
+  color: #171717;
   font-family: var(--font-mono);
   font-size: var(--terminal-size);
   line-height: 1.35;
@@ -27,14 +27,13 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.45em;
+  gap: 0.5em;
   overflow: hidden;
 }
 
 .zone-title,
 .panel-hint,
-.status-chip,
-.runtime-box h4 {
+.status-chip {
   margin: 0;
   font-weight: 500;
 }
@@ -43,19 +42,28 @@
 .status-chip,
 .row-prefix-muted,
 .address-token {
-  color: #8a8a8a;
+  color: #7f7f7f;
 }
 
 .memory-stage-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 0.8em;
+  gap: 0.7em;
+}
+
+.runtime-inline-error {
+  color: #a61e1e;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .memory-console {
   display: flex;
   flex-direction: column;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .memory-row {
@@ -85,7 +93,7 @@
   padding: 0;
   margin: 0;
   min-width: 2ch;
-  color: #111111;
+  color: #171717;
   cursor: pointer;
 }
 
@@ -101,10 +109,10 @@
 }
 
 button {
-  border: 1px solid #d0d0d0;
-  background: #f7f7f7;
+  border: 1px solid #d2d2d2;
+  background: #f8f8f8;
   color: #191919;
-  padding: 0.18em 0.45em;
+  padding: 0.2em 0.5em;
   cursor: pointer;
 }
 
@@ -117,27 +125,12 @@ button.secondary {
   background: #fcfcfc;
 }
 
-.runtime-box {
-  border: 1px solid #e4e4e4;
-  padding: 0.35em 0.45em;
-  display: grid;
-  gap: 0.3em;
-  min-height: 0;
-}
-
-.runtime-box pre {
-  margin: 0;
-  white-space: pre-wrap;
-  overflow: auto;
-  max-height: 8.5em;
-}
-
 .offset-editor,
 .instruction-editor {
   width: 100%;
-  border: 1px solid #dddddd;
-  background: #ffffff;
-  color: #111111;
+  border: 0;
+  background: #f7f7f7;
+  color: #171717;
   padding: 0.35em 0.45em;
   resize: none;
   line-height: 1.35;
@@ -148,36 +141,36 @@ button.secondary {
   min-height: 0;
 }
 
-.instructions-editor {
+.code-editor {
   min-height: 0;
-  height: 100%;
+  flex: 1;
   display: grid;
   grid-template-columns: 4ch 1fr;
   gap: 0.35em;
 }
 
-.instruction-line-numbers {
+.code-line-numbers,
+.readonly-line-numbers {
   margin: 0;
-  border: 1px solid #dddddd;
-  background: #fafafa;
+  background: #f4f4f4;
   color: #8f8f8f;
-  padding: 0.35em 0;
+  padding: 0.35em 0.2em 0.35em 0;
   overflow: hidden;
   text-align: right;
 }
 
-.instruction-line-numbers > div {
+.code-line-numbers > div,
+.readonly-line-numbers > div {
   padding: 0 0.45em;
 }
 
-.instruction-editor-surface {
+.code-surface {
   position: relative;
   min-height: 0;
-  border: 1px solid #dddddd;
-  background: #ffffff;
+  background: #f7f7f7;
 }
 
-.instruction-highlight,
+.code-highlight,
 .instruction-editor {
   position: absolute;
   inset: 0;
@@ -190,20 +183,16 @@ button.secondary {
   line-height: 1.35;
 }
 
-.instruction-highlight {
+.code-highlight {
   pointer-events: none;
   white-space: pre;
-  color: #111111;
-}
-
-.instruction-highlight-line.is-active-line {
-  background: #f8f8f8;
+  color: #171717;
 }
 
 .instruction-editor {
   background: transparent;
   color: transparent;
-  caret-color: #111111;
+  caret-color: #171717;
 }
 
 .instruction-editor::selection {
@@ -211,18 +200,74 @@ button.secondary {
   color: transparent;
 }
 
+.code-line {
+  min-height: 1.35em;
+}
+
+.code-line.is-cursor-line {
+  background: #eef4ff;
+}
+
+.code-line.is-program-line {
+  background: #fff3cd;
+}
+
+.code-line.is-cursor-line.is-program-line {
+  background: #e7f0ff;
+}
+
+.high-level-zone {
+  min-height: 0;
+}
+
+.example-select-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+}
+
+.example-select-row select {
+  min-width: 14em;
+  border: 1px solid #d2d2d2;
+  background: #ffffff;
+  color: #171717;
+  padding: 0.15em 0.3em;
+}
+
+.readonly-grid {
+  min-height: 0;
+  flex: 1;
+  display: grid;
+  grid-template-columns: 4ch 1fr;
+  gap: 0.35em;
+}
+
+.readonly-code {
+  margin: 0;
+  background: #f7f7f7;
+  color: #171717;
+  padding: 0.35em 0.45em;
+  overflow: auto;
+  white-space: pre;
+}
+
 .error-box {
   background: #fff3f3;
   color: #8d2b2b;
   padding: 0.28em 0.4em;
+  overflow: auto;
 }
 
 @media (max-width: 1100px) {
   .memory-layout-app {
-    --terminal-size: calc(92vw / 50);
+    --terminal-size: clamp(14px, calc(92vw / 48), 20px);
     height: auto;
     min-height: 100vh;
     grid-template-columns: 1fr;
     grid-template-rows: repeat(4, minmax(16em, auto));
+  }
+
+  .example-select-row {
+    flex-wrap: wrap;
   }
 }

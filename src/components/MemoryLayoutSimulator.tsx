@@ -28,6 +28,27 @@ interface MachineSnapshot {
   locals: Record<string, number>
 }
 
+interface ParsedOffsets {
+  values: Record<string, number>
+  errors: string[]
+  lineToOffset: Array<number | null>
+}
+
+interface ExecutionResult {
+  nextSnapshot: MachineSnapshot
+  trace: TraceEntry
+  succeeded: boolean
+}
+
+interface HighLevelExample {
+  id: string
+  label: string
+  highLevelCode: string
+  offsetsText: string
+  lowLevelCode: string
+  lowToHighMap: number[]
+}
+
 type TokenKind =
   | 'number'
   | 'identifier'
@@ -49,35 +70,55 @@ interface ExpressionContext {
   allowMemoryAccess: boolean
 }
 
-interface ParsedOffsets {
-  values: Record<string, number>
-  errors: string[]
-  lineToOffset: Array<number | null>
-}
-
-interface ExecutionResult {
-  nextSnapshot: MachineSnapshot
-  trace: TraceEntry
-  printed: string[]
-  succeeded: boolean
-}
-
 const DEFAULT_MEMORY_SIZE = 16
 const MEMORY_COLUMNS = 16
-const INSTRUCTION_SPLIT_AT = 12
-
-const INITIAL_OFFSETS_TEXT = ['a_offset: 0', 'b_offset: 1', 'c_offset: a_offset + 3'].join('\n')
-
-const INITIAL_INSTRUCTIONS_TEXT = [
-  'mem[a_offset] = 2',
-  'mem[b_offset] = 3',
-  'mem[c_offset] = mem[a_offset] + mem[b_offset]',
-  'print(mem[c_offset])',
-].join('\n')
 
 const IDENTIFIER_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/
 
 const OFFSET_COLOR_PALETTE = ['#d9480f', '#1c7ed6', '#2b8a3e', '#c92a2a', '#5f3dc4', '#0b7285']
+
+const HIGH_LEVEL_EXAMPLES: HighLevelExample[] = [
+  {
+    id: 'sum-two-values',
+    label: 'sum two values',
+    highLevelCode: ['a = 2', 'b = 3', 'c = a + b', 'print(c)'].join('\n'),
+    offsetsText: ['a_offset: 0', 'b_offset: 1', 'c_offset: 3'].join('\n'),
+    lowLevelCode: [
+      'mem[a_offset] = 2',
+      'mem[b_offset] = 3',
+      'mem[c_offset] = mem[a_offset] + mem[b_offset]',
+      'print(mem[c_offset])',
+    ].join('\n'),
+    lowToHighMap: [0, 1, 2, 3],
+  },
+  {
+    id: 'difference-and-product',
+    label: 'difference and product',
+    highLevelCode: ['x = 9', 'y = 4', 'd = x - y', 'p = x * y', 'print(d)', 'print(p)'].join('\n'),
+    offsetsText: ['x_offset: 0', 'y_offset: 1', 'd_offset: 2', 'p_offset: 3'].join('\n'),
+    lowLevelCode: [
+      'mem[x_offset] = 9',
+      'mem[y_offset] = 4',
+      'mem[d_offset] = mem[x_offset] - mem[y_offset]',
+      'mem[p_offset] = mem[x_offset] * mem[y_offset]',
+      'print(mem[d_offset])',
+      'print(mem[p_offset])',
+    ].join('\n'),
+    lowToHighMap: [0, 1, 2, 3, 4, 5],
+  },
+  {
+    id: 'reuse-offset-expression',
+    label: 'reuse offset expression',
+    highLevelCode: ['base = 7', 'next_value = base + 1', 'print(next_value)'].join('\n'),
+    offsetsText: ['base_offset: 0', 'next_offset: base_offset + 1'].join('\n'),
+    lowLevelCode: [
+      'mem[base_offset] = 7',
+      'mem[next_offset] = mem[base_offset] + 1',
+      'print(mem[next_offset])',
+    ].join('\n'),
+    lowToHighMap: [0, 1, 2],
+  },
+]
 
 class ExpressionParser {
   private readonly tokens: Token[]
@@ -422,13 +463,6 @@ const suggestNextOffsetValue = (text: string, targetLine: number, memorySize: nu
   return Math.max(...resolved) + 1
 }
 
-const normalizeTailLines = (lines: string[]): string[] => {
-  if (lines.length === 1 && lines[0] === '') {
-    return []
-  }
-  return lines
-}
-
 const extractOffsetNames = (line: string, offsetValues: Record<string, number>): string[] => {
   const names: string[] = []
   const seen = new Set<string>()
@@ -447,7 +481,7 @@ const extractOffsetNames = (line: string, offsetValues: Record<string, number>):
   return names
 }
 
-const renderInstructionLineWithColors = (
+const renderLineWithColors = (
   line: string,
   colorByOffsetName: Map<string, string>,
   lineKey: string,
@@ -538,7 +572,6 @@ const executeInstruction = (
   const trimmed = line.trim()
   const readsMap = new Map<number, number>()
   const writes: MemoryWrite[] = []
-  const printed: string[] = []
 
   const memory = [...snapshot.memory]
   const initialized = [...snapshot.initialized]
@@ -590,7 +623,6 @@ const executeInstruction = (
       return {
         nextSnapshot: snapshot,
         trace,
-        printed,
         succeeded: true,
       }
     }
@@ -598,9 +630,8 @@ const executeInstruction = (
     const printMatch = trimmed.match(/^print\s*\((.*)\)\s*$/)
 
     if (printMatch) {
-      const printedValue = evaluateRuntime(printMatch[1])
-      printed.push(String(printedValue))
-      trace.note = `print -> ${printedValue}`
+      evaluateRuntime(printMatch[1])
+      trace.note = 'print'
     } else {
       const assignmentIndex = findTopLevelAssignment(trimmed)
       if (assignmentIndex === -1) {
@@ -635,10 +666,6 @@ const executeInstruction = (
           previousKnown,
           previousValue,
         })
-
-        trace.note = previousKnown
-          ? `write mem[${computedOffset}] = ${nextValue}; previous value known from explicit read`
-          : `write mem[${computedOffset}] = ${nextValue}; previous value unknown to this instruction`
       } else {
         if (!IDENTIFIER_PATTERN.test(leftHandSide)) {
           throw new Error(`Invalid assignment target "${leftHandSide}".`)
@@ -650,7 +677,6 @@ const executeInstruction = (
 
         const value = Math.trunc(evaluateRuntime(rightHandSide))
         locals[leftHandSide] = value
-        trace.note = `set ${leftHandSide} = ${value}`
       }
     }
 
@@ -658,7 +684,6 @@ const executeInstruction = (
       .sort((left, right) => left[0] - right[0])
       .map(([offset, value]) => ({ offset, value }))
     trace.writes = [...writes].sort((left, right) => left.offset - right.offset)
-    trace.printed = [...printed]
 
     return {
       nextSnapshot: {
@@ -667,7 +692,6 @@ const executeInstruction = (
         locals,
       },
       trace,
-      printed,
       succeeded: true,
     }
   } catch (error) {
@@ -679,12 +703,10 @@ const executeInstruction = (
       .sort((left, right) => left[0] - right[0])
       .map(([offset, value]) => ({ offset, value }))
     trace.writes = []
-    trace.printed = []
 
     return {
       nextSnapshot: snapshot,
       trace,
-      printed: [],
       succeeded: false,
     }
   }
@@ -719,62 +741,51 @@ export const MemoryLayoutSimulator: React.FC = () => {
   const memorySize = DEFAULT_MEMORY_SIZE
 
   const offsetEditorRef = useRef<HTMLTextAreaElement>(null)
+  const lowLevelEditorRef = useRef<HTMLTextAreaElement>(null)
+  const lowLevelHighlightRef = useRef<HTMLPreElement>(null)
+  const lowLevelLineRef = useRef<HTMLPreElement>(null)
 
-  const instructionEditorLeftRef = useRef<HTMLTextAreaElement>(null)
-  const instructionEditorRightRef = useRef<HTMLTextAreaElement>(null)
+  const [selectedExampleId, setSelectedExampleId] = useState(HIGH_LEVEL_EXAMPLES[0].id)
 
-  const instructionHighlightLeftRef = useRef<HTMLPreElement>(null)
-  const instructionHighlightRightRef = useRef<HTMLPreElement>(null)
-
-  const instructionLineLeftRef = useRef<HTMLPreElement>(null)
-  const instructionLineRightRef = useRef<HTMLPreElement>(null)
-
-  const [offsetEditorText, setOffsetEditorText] = useState(INITIAL_OFFSETS_TEXT)
-  const [instructionEditorText, setInstructionEditorText] = useState(INITIAL_INSTRUCTIONS_TEXT)
+  const [offsetEditorText, setOffsetEditorText] = useState(HIGH_LEVEL_EXAMPLES[0].offsetsText)
+  const [lowLevelEditorText, setLowLevelEditorText] = useState(HIGH_LEVEL_EXAMPLES[0].lowLevelCode)
 
   const [memory, setMemory] = useState<number[]>(Array(DEFAULT_MEMORY_SIZE).fill(0))
   const [initialized, setInitialized] = useState<boolean[]>(Array(DEFAULT_MEMORY_SIZE).fill(false))
   const [locals, setLocals] = useState<Record<string, number>>({})
   const [programCounter, setProgramCounter] = useState(0)
-  const [printedOutput, setPrintedOutput] = useState<string[]>([])
-  const [lastStep, setLastStep] = useState<TraceEntry | null>(null)
   const [runtimeError, setRuntimeError] = useState<string | null>(null)
   const [selectedOffset, setSelectedOffset] = useState(0)
 
   const [activeOffsetLine, setActiveOffsetLine] = useState(0)
-  const [activeInstructionLine, setActiveInstructionLine] = useState(0)
-  const [focusedEditor, setFocusedEditor] = useState<
-    'offsets' | 'instructions-left' | 'instructions-right' | null
-  >(null)
+  const [activeLowLevelLine, setActiveLowLevelLine] = useState(0)
+  const [focusedEditor, setFocusedEditor] = useState<'offsets' | 'low-level' | null>(null)
+
+  const selectedExample = useMemo(
+    () =>
+      HIGH_LEVEL_EXAMPLES.find((example) => example.id === selectedExampleId) || HIGH_LEVEL_EXAMPLES[0],
+    [selectedExampleId],
+  )
+
+  const highLevelLines = useMemo(
+    () => splitEditorLines(selectedExample.highLevelCode),
+    [selectedExample.highLevelCode],
+  )
 
   const parsedOffsets = useMemo(
     () => parseOffsetEditorText(offsetEditorText, memorySize),
     [offsetEditorText, memorySize],
   )
 
-  const instructionLines = useMemo(
-    () => splitEditorLines(instructionEditorText),
-    [instructionEditorText],
+  const lowLevelLines = useMemo(
+    () => splitEditorLines(lowLevelEditorText),
+    [lowLevelEditorText],
   )
 
-  const leftInstructionLines = useMemo(
-    () => instructionLines.slice(0, INSTRUCTION_SPLIT_AT),
-    [instructionLines],
-  )
+  const activeLowLevelText = lowLevelLines[activeLowLevelLine] ?? ''
 
-  const rightInstructionLines = useMemo(
-    () => instructionLines.slice(INSTRUCTION_SPLIT_AT),
-    [instructionLines],
-  )
-
-  const leftEditorValue = leftInstructionLines.join('\n')
-  const rightEditorValue =
-    rightInstructionLines.length > 0 ? rightInstructionLines.join('\n') : ''
-
-  const activeInstructionText = instructionLines[activeInstructionLine] ?? ''
-
-  const instructionOffsetColors = useMemo(() => {
-    const names = extractOffsetNames(activeInstructionText, parsedOffsets.values)
+  const lowLevelOffsetColors = useMemo(() => {
+    const names = extractOffsetNames(activeLowLevelText, parsedOffsets.values)
     const colorByOffsetName = new Map<string, string>()
     const colorByCell = new Map<number, string>()
 
@@ -792,7 +803,7 @@ export const MemoryLayoutSimulator: React.FC = () => {
       colorByOffsetName,
       colorByCell,
     }
-  }, [activeInstructionText, parsedOffsets.values])
+  }, [activeLowLevelText, parsedOffsets.values])
 
   const resetExecutionState = (): void => {
     const snapshot = defaultSnapshot(memorySize)
@@ -800,10 +811,18 @@ export const MemoryLayoutSimulator: React.FC = () => {
     setInitialized(snapshot.initialized)
     setLocals(snapshot.locals)
     setProgramCounter(0)
-    setPrintedOutput([])
-    setLastStep(null)
     setRuntimeError(null)
   }
+
+  useEffect(() => {
+    setOffsetEditorText(selectedExample.offsetsText)
+    setLowLevelEditorText(selectedExample.lowLevelCode)
+    setActiveOffsetLine(0)
+    setActiveLowLevelLine(0)
+    setFocusedEditor(null)
+    setSelectedOffset(0)
+    resetExecutionState()
+  }, [selectedExample.id, selectedExample.offsetsText, selectedExample.lowLevelCode])
 
   const handleOffsetEditorChange = (event: React.ChangeEvent<HTMLTextAreaElement>): void => {
     const nextText = event.target.value.replace(/\r/g, '')
@@ -842,81 +861,40 @@ export const MemoryLayoutSimulator: React.FC = () => {
     setActiveOffsetLine(getLineIndexFromCursor(offsetEditorText, editor.selectionStart))
   }
 
-  const handleInstructionEditorChangeLeft = (
-    event: React.ChangeEvent<HTMLTextAreaElement>,
-  ): void => {
-    const nextLeftLines = splitEditorLines(event.target.value.replace(/\r/g, ''))
-    const currentRightLines = instructionLines.slice(INSTRUCTION_SPLIT_AT)
-    setInstructionEditorText([...nextLeftLines, ...currentRightLines].join('\n'))
+  const handleLowLevelEditorChange = (event: React.ChangeEvent<HTMLTextAreaElement>): void => {
+    setLowLevelEditorText(event.target.value.replace(/\r/g, ''))
     resetExecutionState()
   }
 
-  const handleInstructionEditorChangeRight = (
-    event: React.ChangeEvent<HTMLTextAreaElement>,
-  ): void => {
-    const nextRightLines = normalizeTailLines(
-      splitEditorLines(event.target.value.replace(/\r/g, '')),
-    )
-    const currentLeftLines = instructionLines.slice(0, INSTRUCTION_SPLIT_AT)
-    setInstructionEditorText([...currentLeftLines, ...nextRightLines].join('\n'))
-    resetExecutionState()
-  }
-
-  const handleInstructionCursorActivityLeft = (): void => {
-    const editor = instructionEditorLeftRef.current
+  const handleLowLevelCursorActivity = (): void => {
+    const editor = lowLevelEditorRef.current
     if (!editor) {
       return
     }
-    const localLine = getLineIndexFromCursor(leftEditorValue, editor.selectionStart)
-    setActiveInstructionLine(localLine)
+    setActiveLowLevelLine(getLineIndexFromCursor(lowLevelEditorText, editor.selectionStart))
   }
 
-  const handleInstructionCursorActivityRight = (): void => {
-    const editor = instructionEditorRightRef.current
-    if (!editor) {
-      return
-    }
-    const localLine = getLineIndexFromCursor(rightEditorValue, editor.selectionStart)
-    setActiveInstructionLine(INSTRUCTION_SPLIT_AT + localLine)
-  }
-
-  const syncInstructionEditorScrollLeft = (): void => {
-    const editor = instructionEditorLeftRef.current
+  const syncLowLevelEditorScroll = (): void => {
+    const editor = lowLevelEditorRef.current
     if (!editor) {
       return
     }
 
-    if (instructionHighlightLeftRef.current) {
-      instructionHighlightLeftRef.current.scrollTop = editor.scrollTop
-      instructionHighlightLeftRef.current.scrollLeft = editor.scrollLeft
+    if (lowLevelHighlightRef.current) {
+      lowLevelHighlightRef.current.scrollTop = editor.scrollTop
+      lowLevelHighlightRef.current.scrollLeft = editor.scrollLeft
     }
 
-    if (instructionLineLeftRef.current) {
-      instructionLineLeftRef.current.scrollTop = editor.scrollTop
-    }
-  }
-
-  const syncInstructionEditorScrollRight = (): void => {
-    const editor = instructionEditorRightRef.current
-    if (!editor) {
-      return
-    }
-
-    if (instructionHighlightRightRef.current) {
-      instructionHighlightRightRef.current.scrollTop = editor.scrollTop
-      instructionHighlightRightRef.current.scrollLeft = editor.scrollLeft
-    }
-
-    if (instructionLineRightRef.current) {
-      instructionLineRightRef.current.scrollTop = editor.scrollTop
+    if (lowLevelLineRef.current) {
+      lowLevelLineRef.current.scrollTop = editor.scrollTop
     }
   }
 
   useEffect(() => {
-    if (activeInstructionLine >= instructionLines.length) {
-      setActiveInstructionLine(Math.max(0, instructionLines.length - 1))
+    if (activeLowLevelLine >= lowLevelLines.length) {
+      setActiveLowLevelLine(Math.max(0, lowLevelLines.length - 1))
     }
-  }, [activeInstructionLine, instructionLines.length])
+  }, [activeLowLevelLine, lowLevelLines.length])
 
   useEffect(() => {
     if (focusedEditor !== 'offsets') {
@@ -928,30 +906,29 @@ export const MemoryLayoutSimulator: React.FC = () => {
     }
   }, [focusedEditor, activeOffsetLine, parsedOffsets.lineToOffset])
 
-  const activeInstructionNamesKey = instructionOffsetColors.names.join('|')
+  const activeLowLevelNamesKey = lowLevelOffsetColors.names.join('|')
   useEffect(() => {
-    if (focusedEditor !== 'instructions-left' && focusedEditor !== 'instructions-right') {
+    if (focusedEditor !== 'low-level') {
       return
     }
 
-    if (instructionOffsetColors.names.length === 0) {
+    if (lowLevelOffsetColors.names.length === 0) {
       return
     }
 
-    const firstName = instructionOffsetColors.names[0]
+    const firstName = lowLevelOffsetColors.names[0]
     const firstOffset = parsedOffsets.values[firstName]
     if (firstOffset !== undefined) {
       setSelectedOffset(firstOffset)
     }
-  }, [focusedEditor, activeInstructionNamesKey, parsedOffsets.values, instructionOffsetColors.names])
+  }, [focusedEditor, activeLowLevelNamesKey, parsedOffsets.values, lowLevelOffsetColors.names])
 
   useEffect(() => {
-    syncInstructionEditorScrollLeft()
-    syncInstructionEditorScrollRight()
-  }, [instructionEditorText])
+    syncLowLevelEditorScroll()
+  }, [lowLevelEditorText])
 
   const executeSingleStep = (): void => {
-    if (programCounter >= instructionLines.length) {
+    if (programCounter >= lowLevelLines.length) {
       return
     }
 
@@ -962,19 +939,14 @@ export const MemoryLayoutSimulator: React.FC = () => {
 
     const snapshot: MachineSnapshot = { memory, initialized, locals }
     const result = executeInstruction(
-      instructionLines[programCounter] ?? '',
+      lowLevelLines[programCounter] ?? '',
       programCounter,
       snapshot,
       parsedOffsets.values,
       memorySize,
     )
 
-    setLastStep(result.trace)
     setSelectedOffset((current) => pickSelectedOffset(result.trace, current))
-
-    if (result.printed.length > 0) {
-      setPrintedOutput((current) => [...current, ...result.printed])
-    }
 
     if (!result.succeeded) {
       setRuntimeError(result.trace.error || 'Execution failed.')
@@ -989,7 +961,7 @@ export const MemoryLayoutSimulator: React.FC = () => {
   }
 
   const executeAll = (): void => {
-    if (programCounter >= instructionLines.length) {
+    if (programCounter >= lowLevelLines.length) {
       return
     }
 
@@ -1005,11 +977,10 @@ export const MemoryLayoutSimulator: React.FC = () => {
     }
     let workingCounter = programCounter
     let latestTrace: TraceEntry | null = null
-    const producedOutput: string[] = []
 
-    while (workingCounter < instructionLines.length) {
+    while (workingCounter < lowLevelLines.length) {
       const result = executeInstruction(
-        instructionLines[workingCounter] ?? '',
+        lowLevelLines[workingCounter] ?? '',
         workingCounter,
         workingSnapshot,
         parsedOffsets.values,
@@ -1017,7 +988,6 @@ export const MemoryLayoutSimulator: React.FC = () => {
       )
 
       latestTrace = result.trace
-      producedOutput.push(...result.printed)
 
       if (!result.succeeded) {
         setRuntimeError(result.trace.error || 'Execution failed.')
@@ -1032,117 +1002,48 @@ export const MemoryLayoutSimulator: React.FC = () => {
       return
     }
 
-    setLastStep(latestTrace)
     setSelectedOffset((current) => pickSelectedOffset(latestTrace, current))
-
-    if (producedOutput.length > 0) {
-      setPrintedOutput((current) => [...current, ...producedOutput])
-    }
 
     setMemory(workingSnapshot.memory)
     setInitialized(workingSnapshot.initialized)
     setLocals(workingSnapshot.locals)
     setProgramCounter(workingCounter)
 
-    if (workingCounter >= instructionLines.length) {
+    if (workingCounter >= lowLevelLines.length) {
       setRuntimeError(null)
     }
   }
 
-  const isProgramFinished = programCounter >= instructionLines.length
-  const showInstructionCellColors =
-    focusedEditor === 'instructions-left' || focusedEditor === 'instructions-right'
+  const isProgramFinished = programCounter >= lowLevelLines.length
+  const showLowLevelCellColors = focusedEditor === 'low-level'
 
   const showLeftPrefixSeparator = selectedOffset !== 0
 
-  const renderInstructionPane = (
-    side: 'left' | 'right',
-    lines: string[],
-    baseLineIndex: number,
-    editorValue: string,
-  ) => {
-    const displayLines = lines.length > 0 ? lines : ['']
-    const editorRef =
-      side === 'left' ? instructionEditorLeftRef : instructionEditorRightRef
-    const highlightRef =
-      side === 'left' ? instructionHighlightLeftRef : instructionHighlightRightRef
-    const lineRef = side === 'left' ? instructionLineLeftRef : instructionLineRightRef
+  const lowProgramLine = isProgramFinished ? -1 : programCounter
 
-    return (
-      <div className="instructions-editor">
-        <pre ref={lineRef} className="instruction-line-numbers" aria-hidden="true">
-          {displayLines.map((_, index) => (
-            <div key={`${side}-ln-${index}`}>{baseLineIndex + index + 1}</div>
-          ))}
-        </pre>
+  const highProgramLine = useMemo(() => {
+    if (isProgramFinished || highLevelLines.length === 0) {
+      return -1
+    }
 
-        <div className="instruction-editor-surface">
-          <pre ref={highlightRef} className="instruction-highlight" aria-hidden="true">
-            {displayLines.map((line, index) => {
-              const globalLineIndex = baseLineIndex + index
-              const isActiveLine = globalLineIndex === activeInstructionLine
+    const mapped = selectedExample.lowToHighMap[programCounter]
+    if (mapped !== undefined) {
+      return Math.max(0, Math.min(highLevelLines.length - 1, mapped))
+    }
 
-              return (
-                <div
-                  key={`${side}-hl-${globalLineIndex}`}
-                  className={`instruction-highlight-line ${isActiveLine ? 'is-active-line' : ''}`}
-                >
-                  {isActiveLine
-                    ? renderInstructionLineWithColors(
-                        line,
-                        instructionOffsetColors.colorByOffsetName,
-                        `${side}-${globalLineIndex}`,
-                      )
-                    : line || ' '}
-                </div>
-              )
-            })}
-          </pre>
+    if (lowLevelLines.length <= 1) {
+      return 0
+    }
 
-          <textarea
-            ref={editorRef}
-            className="instruction-editor"
-            value={editorValue}
-            onChange={
-              side === 'left'
-                ? handleInstructionEditorChangeLeft
-                : handleInstructionEditorChangeRight
-            }
-            onSelect={
-              side === 'left'
-                ? handleInstructionCursorActivityLeft
-                : handleInstructionCursorActivityRight
-            }
-            onClick={
-              side === 'left'
-                ? handleInstructionCursorActivityLeft
-                : handleInstructionCursorActivityRight
-            }
-            onKeyUp={
-              side === 'left'
-                ? handleInstructionCursorActivityLeft
-                : handleInstructionCursorActivityRight
-            }
-            onScroll={
-              side === 'left'
-                ? syncInstructionEditorScrollLeft
-                : syncInstructionEditorScrollRight
-            }
-            onFocus={() => {
-              setFocusedEditor(side === 'left' ? 'instructions-left' : 'instructions-right')
-              if (side === 'left') {
-                handleInstructionCursorActivityLeft()
-              } else {
-                handleInstructionCursorActivityRight()
-              }
-            }}
-            onBlur={() => setFocusedEditor(null)}
-            spellCheck={false}
-          />
-        </div>
-      </div>
-    )
-  }
+    const ratio = programCounter / (lowLevelLines.length - 1)
+    return Math.max(0, Math.min(highLevelLines.length - 1, Math.round(ratio * (highLevelLines.length - 1))))
+  }, [
+    isProgramFinished,
+    highLevelLines.length,
+    selectedExample.lowToHighMap,
+    programCounter,
+    lowLevelLines.length,
+  ])
 
   return (
     <div className="memory-layout-app">
@@ -1150,12 +1051,10 @@ export const MemoryLayoutSimulator: React.FC = () => {
         <div className="zone-title">memory</div>
 
         <div className="memory-stage-head">
-          <span>[??] = selected</span>
           <span className="status-chip">
-            {isProgramFinished
-              ? 'program finished'
-              : `next line: ${programCounter + 1}/${instructionLines.length}`}
+            {isProgramFinished ? 'program finished' : `next line: ${programCounter + 1}/${lowLevelLines.length}`}
           </span>
+          {runtimeError && <span className="runtime-inline-error">{runtimeError}</span>}
         </div>
 
         <div className="memory-console" role="grid" aria-label="Linear memory">
@@ -1192,8 +1091,8 @@ export const MemoryLayoutSimulator: React.FC = () => {
               const needsSeparator =
                 offset > 0 && selectedOffset !== offset && selectedOffset !== offset - 1
 
-              const instructionColor = showInstructionCellColors
-                ? instructionOffsetColors.colorByCell.get(offset)
+              const lowLevelColor = showLowLevelCellColors
+                ? lowLevelOffsetColors.colorByCell.get(offset)
                 : undefined
 
               return (
@@ -1206,7 +1105,7 @@ export const MemoryLayoutSimulator: React.FC = () => {
                   <button
                     type="button"
                     className={`memory-token value-token ${isSelected ? 'is-selected' : ''}`}
-                    style={instructionColor ? { color: instructionColor } : undefined}
+                    style={lowLevelColor ? { color: lowLevelColor } : undefined}
                     onClick={() => setSelectedOffset(offset)}
                     aria-label={`Cell ${formatAddressToken(offset)} value ${token}`}
                   >
@@ -1244,21 +1143,6 @@ export const MemoryLayoutSimulator: React.FC = () => {
             reset
           </button>
         </div>
-
-        <section className="runtime-box">
-          <h4>print output</h4>
-          <pre>{printedOutput.length > 0 ? printedOutput.join('\n') : '(no output yet)'}</pre>
-          {runtimeError && <div className="error-box">{runtimeError}</div>}
-          <h4>locals</h4>
-          <pre>
-            {Object.keys(locals).length === 0
-              ? '(none)'
-              : Object.entries(locals)
-                  .map(([name, value]) => `${name}=${value}`)
-                  .join(', ')}
-          </pre>
-          {lastStep && <h4>last line: {lastStep.step}</h4>}
-        </section>
       </section>
 
       <section className="zone offsets-zone">
@@ -1291,13 +1175,92 @@ export const MemoryLayoutSimulator: React.FC = () => {
       </section>
 
       <section className="zone instructions-zone">
-        <div className="zone-title">instructions</div>
-        {renderInstructionPane('left', leftInstructionLines, 0, leftEditorValue)}
+        <div className="zone-title">low level instructions</div>
+
+        <div className="code-editor">
+          <pre ref={lowLevelLineRef} className="code-line-numbers" aria-hidden="true">
+            {lowLevelLines.map((_, index) => (
+              <div key={`ln-${index}`}>{index + 1}</div>
+            ))}
+          </pre>
+
+          <div className="code-surface">
+            <pre ref={lowLevelHighlightRef} className="code-highlight" aria-hidden="true">
+              {lowLevelLines.map((line, index) => {
+                const isCursorLine = index === activeLowLevelLine
+                const isProgramLine = index === lowProgramLine
+
+                return (
+                  <div
+                    key={`hl-${index}`}
+                    className={`code-line ${isCursorLine ? 'is-cursor-line' : ''} ${
+                      isProgramLine ? 'is-program-line' : ''
+                    }`}
+                  >
+                    {isCursorLine
+                      ? renderLineWithColors(line, lowLevelOffsetColors.colorByOffsetName, `low-${index}`)
+                      : line || ' '}
+                  </div>
+                )
+              })}
+            </pre>
+
+            <textarea
+              ref={lowLevelEditorRef}
+              className="instruction-editor"
+              value={lowLevelEditorText}
+              onChange={handleLowLevelEditorChange}
+              onSelect={handleLowLevelCursorActivity}
+              onClick={handleLowLevelCursorActivity}
+              onKeyUp={handleLowLevelCursorActivity}
+              onScroll={syncLowLevelEditorScroll}
+              onFocus={() => {
+                setFocusedEditor('low-level')
+                handleLowLevelCursorActivity()
+              }}
+              onBlur={() => setFocusedEditor(null)}
+              spellCheck={false}
+            />
+          </div>
+        </div>
       </section>
 
-      <section className="zone instructions-zone">
-        <div className="zone-title">instructions cont.</div>
-        {renderInstructionPane('right', rightInstructionLines, INSTRUCTION_SPLIT_AT, rightEditorValue)}
+      <section className="zone high-level-zone">
+        <div className="zone-title">high level code</div>
+
+        <div className="example-select-row">
+          <label htmlFor="high-level-example">example</label>
+          <select
+            id="high-level-example"
+            value={selectedExampleId}
+            onChange={(event) => setSelectedExampleId(event.target.value)}
+          >
+            {HIGH_LEVEL_EXAMPLES.map((example) => (
+              <option key={example.id} value={example.id}>
+                {example.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="readonly-grid">
+          <pre className="readonly-line-numbers" aria-hidden="true">
+            {highLevelLines.map((_, index) => (
+              <div key={`high-ln-${index}`}>{index + 1}</div>
+            ))}
+          </pre>
+
+          <pre className="readonly-code">
+            {highLevelLines.map((line, index) => (
+              <div
+                key={`high-line-${index}`}
+                className={`code-line ${index === highProgramLine ? 'is-program-line' : ''}`}
+              >
+                {line || ' '}
+              </div>
+            ))}
+          </pre>
+        </div>
       </section>
     </div>
   )

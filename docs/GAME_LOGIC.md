@@ -7,8 +7,9 @@ Memory Layout Lab visualizes low-level memory access over a linear byte array.
 The model contains:
 - Linear memory displayed with fixed 16 columns per row
 - Named offsets resolved from integer expressions
-- Instruction list executed one line at a time
-- Immediate per-step memory highlighting and print output
+- Editable Low-Level instructions executed one line at a time
+- Read-only High-Level code view synchronized with execution progress
+- Immediate per-step memory highlighting
 
 ## Data Model
 
@@ -57,8 +58,8 @@ Expressions support:
 - 2x2 equal quadrants:
 	- Top-left: memory row and execution controls.
 	- Top-right: multiline offset editor.
-	- Bottom-left: instruction editor.
-	- Bottom-right: instruction continuation editor.
+	- Bottom-left: Low-Level instruction editor.
+	- Bottom-right: High-Level read-only code pane with example selector.
 - Memory row details:
 	- Header columns show low address parts (`00..15`).
 	- Row prefix shows the high address part (currently `00`).
@@ -67,7 +68,10 @@ Expressions support:
 - Offset editor:
 	- Uses `name: expression` lines without numbering.
 	- Cursor line selects the resolved memory cell.
-- Instruction editors:
-	- Lines are numbered across both panes as one continuous list.
-	- Active line highlights referenced offsets with per-offset colors.
+- Low-Level editor:
+	- Lines are numbered and editable.
+	- Cursor line highlights referenced offsets with per-offset colors.
 	- Matching memory cells reuse the same colors.
+- High-Level pane:
+	- Read-only code with line numbering.
+	- Current execution line is highlighted in sync with the Low-Level program counter.
