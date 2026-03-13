@@ -47,6 +47,7 @@ interface HighLevelExample {
   offsetsText: string
   lowLevelCode: string
   lowToHighMap: number[]
+  structLayout?: string
 }
 
 type TokenKind =
@@ -117,6 +118,48 @@ const HIGH_LEVEL_EXAMPLES: HighLevelExample[] = [
       'print(mem[next_offset])',
     ].join('\n'),
     lowToHighMap: [0, 1, 2],
+  },
+  {
+    id: 'point-distance',
+    label: 'struct: point distance',
+    highLevelCode: [
+      'p1.x = 3',
+      'p1.y = 4',
+      'p2.x = 6',
+      'p2.y = 8',
+      'dx = p2.x - p1.x',
+      'dy = p2.y - p1.y',
+      'dist_sq = dx*dx + dy*dy',
+      'print(dist_sq)',
+    ].join('\n'),
+    offsetsText: [
+      'p1_x: 0',
+      'p1_y: 1',
+      'p2_x: 2',
+      'p2_y: 3',
+      'dx: 4',
+      'dy: 5',
+      'dist_sq: 6',
+    ].join('\n'),
+    lowLevelCode: [
+      'mem[p1_x] = 3',
+      'mem[p1_y] = 4',
+      'mem[p2_x] = 6',
+      'mem[p2_y] = 8',
+      'mem[dx] = mem[p2_x] - mem[p1_x]',
+      'mem[dy] = mem[p2_y] - mem[p1_y]',
+      'mem[dist_sq] = mem[dx] * mem[dx] + mem[dy] * mem[dy]',
+      'print(mem[dist_sq])',
+    ].join('\n'),
+    lowToHighMap: [0, 1, 2, 3, 4, 5, 6, 7],
+    structLayout: [
+      'Point (2 bytes)',
+      '  .x  +0',
+      '  .y  +1',
+      '',
+      'p1  at offset 0',
+      'p2  at offset 2',
+    ].join('\n'),
   },
 ]
 
@@ -630,7 +673,8 @@ const executeInstruction = (
     const printMatch = trimmed.match(/^print\s*\((.*)\)\s*$/)
 
     if (printMatch) {
-      evaluateRuntime(printMatch[1])
+      const printedValue = evaluateRuntime(printMatch[1])
+      trace.printed = [String(printedValue)]
       trace.note = 'print'
     } else {
       const assignmentIndex = findTopLevelAssignment(trimmed)
@@ -754,6 +798,7 @@ export const MemoryLayoutSimulator: React.FC = () => {
   const [initialized, setInitialized] = useState<boolean[]>(Array(DEFAULT_MEMORY_SIZE).fill(false))
   const [locals, setLocals] = useState<Record<string, number>>({})
   const [programCounter, setProgramCounter] = useState(0)
+  const [printedOutput, setPrintedOutput] = useState<string[]>([])
   const [runtimeError, setRuntimeError] = useState<string | null>(null)
   const [selectedOffset, setSelectedOffset] = useState(0)
 
@@ -811,6 +856,7 @@ export const MemoryLayoutSimulator: React.FC = () => {
     setInitialized(snapshot.initialized)
     setLocals(snapshot.locals)
     setProgramCounter(0)
+    setPrintedOutput([])
     setRuntimeError(null)
   }
 
@@ -953,6 +999,10 @@ export const MemoryLayoutSimulator: React.FC = () => {
       return
     }
 
+    if (result.trace.printed.length > 0) {
+      setPrintedOutput((current) => [...current, ...result.trace.printed])
+    }
+
     setMemory(result.nextSnapshot.memory)
     setInitialized(result.nextSnapshot.initialized)
     setLocals(result.nextSnapshot.locals)
@@ -977,6 +1027,7 @@ export const MemoryLayoutSimulator: React.FC = () => {
     }
     let workingCounter = programCounter
     let latestTrace: TraceEntry | null = null
+    const producedOutput: string[] = []
 
     while (workingCounter < lowLevelLines.length) {
       const result = executeInstruction(
@@ -988,6 +1039,7 @@ export const MemoryLayoutSimulator: React.FC = () => {
       )
 
       latestTrace = result.trace
+      producedOutput.push(...result.trace.printed)
 
       if (!result.succeeded) {
         setRuntimeError(result.trace.error || 'Execution failed.')
@@ -1003,6 +1055,10 @@ export const MemoryLayoutSimulator: React.FC = () => {
     }
 
     setSelectedOffset((current) => pickSelectedOffset(latestTrace, current))
+
+    if (producedOutput.length > 0) {
+      setPrintedOutput((current) => [...current, ...producedOutput])
+    }
 
     setMemory(workingSnapshot.memory)
     setInitialized(workingSnapshot.initialized)
@@ -1048,74 +1104,74 @@ export const MemoryLayoutSimulator: React.FC = () => {
   return (
     <div className="memory-layout-app">
       <section className="zone memory-zone">
-        <div className="zone-title">memory</div>
-
-        <div className="memory-stage-head">
-          <span className="status-chip">
-            {isProgramFinished ? 'program finished' : `next line: ${programCounter + 1}/${lowLevelLines.length}`}
-          </span>
-          {runtimeError && <span className="runtime-inline-error">{runtimeError}</span>}
-        </div>
-
-        <div className="memory-console" role="grid" aria-label="Linear memory">
-          <div className="memory-row" role="row">
-            <span className="row-prefix row-prefix-muted" aria-hidden="true">
-              {'  '}
-            </span>
-            <span className="separator" aria-hidden="true">
-              {' '}
-            </span>
-            {Array.from({ length: MEMORY_COLUMNS }, (_, offset) => (
-              <React.Fragment key={`address-${offset}`}>
-                {offset > 0 && (
-                  <span className="separator" aria-hidden="true">
-                    {' '}
-                  </span>
-                )}
-                <span className="memory-token address-token">{formatAddressToken(offset)}</span>
-              </React.Fragment>
-            ))}
-          </div>
-
-          <div className="memory-row" role="row">
-            <span className="row-prefix row-prefix-muted">00</span>
-            {showLeftPrefixSeparator && (
+        <div className="memory-zone-header">
+          <span className="zone-title">memory</span>
+          <div className="memory-console" role="grid" aria-label="Linear memory">
+            <div className="memory-row" role="row">
+              <span className="row-prefix row-prefix-muted" aria-hidden="true">
+                {'  '}
+              </span>
               <span className="separator" aria-hidden="true">
                 {' '}
               </span>
-            )}
-            {Array.from({ length: memorySize }, (_, offset) => {
-              const isSelected = selectedOffset === offset
-              const token = formatByteToken(initialized[offset], memory[offset])
-              const tokenDisplay = isSelected ? `[${token}]` : token
-              const needsSeparator =
-                offset > 0 && selectedOffset !== offset && selectedOffset !== offset - 1
-
-              const lowLevelColor = showLowLevelCellColors
-                ? lowLevelOffsetColors.colorByCell.get(offset)
-                : undefined
-
-              return (
-                <React.Fragment key={`cell-${offset}`}>
-                  {needsSeparator && (
+              {Array.from({ length: MEMORY_COLUMNS }, (_, offset) => (
+                <React.Fragment key={`address-${offset}`}>
+                  {offset > 0 && (
                     <span className="separator" aria-hidden="true">
                       {' '}
                     </span>
                   )}
-                  <button
-                    type="button"
-                    className={`memory-token value-token ${isSelected ? 'is-selected' : ''}`}
-                    style={lowLevelColor ? { color: lowLevelColor } : undefined}
-                    onClick={() => setSelectedOffset(offset)}
-                    aria-label={`Cell ${formatAddressToken(offset)} value ${token}`}
-                  >
-                    {tokenDisplay}
-                  </button>
+                  <span className="memory-token address-token">{formatAddressToken(offset)}</span>
                 </React.Fragment>
-              )
-            })}
+              ))}
+            </div>
+
+            <div className="memory-row" role="row">
+              <span className="row-prefix row-prefix-muted">00</span>
+              {showLeftPrefixSeparator && (
+                <span className="separator" aria-hidden="true">
+                  {' '}
+                </span>
+              )}
+              {Array.from({ length: memorySize }, (_, offset) => {
+                const isSelected = selectedOffset === offset
+                const token = formatByteToken(initialized[offset], memory[offset])
+                const tokenDisplay = isSelected ? `[${token}]` : token
+                const needsSeparator =
+                  offset > 0 && selectedOffset !== offset && selectedOffset !== offset - 1
+
+                const lowLevelColor = showLowLevelCellColors
+                  ? lowLevelOffsetColors.colorByCell.get(offset)
+                  : undefined
+
+                return (
+                  <React.Fragment key={`cell-${offset}`}>
+                    {needsSeparator && (
+                      <span className="separator" aria-hidden="true">
+                        {' '}
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      className={`memory-token value-token ${isSelected ? 'is-selected' : ''}`}
+                      style={lowLevelColor ? { color: lowLevelColor } : undefined}
+                      onClick={() => setSelectedOffset(offset)}
+                      aria-label={`Cell ${formatAddressToken(offset)} value ${token}`}
+                    >
+                      {tokenDisplay}
+                    </button>
+                  </React.Fragment>
+                )
+              })}
+            </div>
           </div>
         </div>
+
+        <pre className="print-output">
+          {printedOutput.length > 0
+            ? printedOutput.join('\n')
+            : <span className="print-output-empty">(output)</span>}
+        </pre>
 
         <div className="execution-controls">
           <button
@@ -1142,36 +1198,48 @@ export const MemoryLayoutSimulator: React.FC = () => {
           >
             reset
           </button>
+          <span className="status-chip">
+            {isProgramFinished ? 'finished' : `next instruction: ${programCounter + 1}/${lowLevelLines.length}`}
+          </span>
+          {runtimeError && <span className="runtime-inline-error">{runtimeError}</span>}
         </div>
       </section>
 
       <section className="zone offsets-zone">
         <div className="zone-title">offsets</div>
-        <p className="panel-hint">format: name: expression</p>
-
-        <textarea
-          ref={offsetEditorRef}
-          className="offset-editor"
-          value={offsetEditorText}
-          onChange={handleOffsetEditorChange}
-          onSelect={handleOffsetCursorActivity}
-          onClick={handleOffsetCursorActivity}
-          onKeyUp={handleOffsetCursorActivity}
-          onFocus={() => {
-            setFocusedEditor('offsets')
-            handleOffsetCursorActivity()
-          }}
-          onBlur={() => setFocusedEditor(null)}
-          spellCheck={false}
-        />
-
-        {parsedOffsets.errors.length > 0 && (
-          <div className="error-box">
-            {parsedOffsets.errors.map((error) => (
-              <div key={error}>{error}</div>
-            ))}
+        <div className="offsets-body">
+          <div className="offsets-left">
+            <p className="panel-hint">name: expression</p>
+            <textarea
+              ref={offsetEditorRef}
+              className="offset-editor"
+              value={offsetEditorText}
+              onChange={handleOffsetEditorChange}
+              onSelect={handleOffsetCursorActivity}
+              onClick={handleOffsetCursorActivity}
+              onKeyUp={handleOffsetCursorActivity}
+              onFocus={() => {
+                setFocusedEditor('offsets')
+                handleOffsetCursorActivity()
+              }}
+              onBlur={() => setFocusedEditor(null)}
+              spellCheck={false}
+            />
+            {parsedOffsets.errors.length > 0 && (
+              <div className="error-box">
+                {parsedOffsets.errors.map((error) => (
+                  <div key={error}>{error}</div>
+                ))}
+              </div>
+            )}
           </div>
-        )}
+          {selectedExample.structLayout && (
+            <div className="offsets-right">
+              <p className="panel-hint">struct layout</p>
+              <pre className="struct-layout">{selectedExample.structLayout}</pre>
+            </div>
+          )}
+        </div>
       </section>
 
       <section className="zone instructions-zone">

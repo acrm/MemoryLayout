@@ -9,3 +9,4 @@
 - 2026w11-1.4 — Add multiline editors and terminal-style highlighting
 - 2026w11-1.5 — Rework UI into 2x2 terminal layout
 - 2026w11-1.6 — Add high-level read-only pane and simplify runtime UI
+- 2026w11-1.7 — Memory header inline, print output area, offsets struct layout pane, xy-distance example

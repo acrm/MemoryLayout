@@ -52,6 +52,24 @@
   gap: 0.7em;
 }
 
+.memory-zone-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.9em;
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex-shrink: 0;
+}
+
+.memory-zone-header .zone-title {
+  flex-shrink: 0;
+  padding-top: 0.15em;
+}
+
+.memory-zone-header .memory-console {
+  overflow: visible;
+}
+
 .runtime-inline-error {
   color: #a61e1e;
   white-space: nowrap;
@@ -256,6 +274,58 @@ button.secondary {
   color: #8d2b2b;
   padding: 0.28em 0.4em;
   overflow: auto;
+}
+
+.print-output {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  background: #f7f7f7;
+  padding: 0.35em 0.45em;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+
+.print-output-empty {
+  color: #b0b0b0;
+}
+
+.offsets-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6em;
+}
+
+.offsets-left {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3em;
+}
+
+.offsets-left .offset-editor {
+  flex: 1;
+  min-height: 0;
+}
+
+.offsets-right {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3em;
+}
+
+.struct-layout {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  background: #f7f7f7;
+  padding: 0.35em 0.45em;
+  overflow: auto;
+  white-space: pre;
+  color: #171717;
 }
 
 @media (max-width: 1100px) {
